@@ -1,4 +1,4 @@
-from models.auth import Auth
+from modules.auth.domain.auth import Auth
 
 
 # class BusinessTeamMembers(Auth):

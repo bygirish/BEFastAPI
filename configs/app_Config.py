@@ -4,14 +4,15 @@ from configs.prod_config import ProdConfig
 
 
 class AppConfig:
-    __envConfig: EnvConfig = {}
+    __envConfig: any = {}
     __buildConfig: any = {}
 
     def __init__(self):
-        self.__envConfig = EnvConfig().get_env_config();
-        if self.__envConfig.get("env") == "dev":
+        self.__envConfig = EnvConfig().get_env_config()
+        env = self.__envConfig.get("env")
+        if env == "dev":
             self.__buildConfig = DevConfig.getConfig()
-        elif self.__envConfig.get("env") == "prod":
+        elif env == "prod":
             self.__buildConfig = ProdConfig.getConfig()
 
     def get(self):

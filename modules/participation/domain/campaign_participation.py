@@ -1,7 +1,7 @@
 from typing import Literal, Union
 
 
-from models.campaign import CampaignType
+from modules.campaign.domain.campaign import CampaignType
 
 
 class UserMetaData:

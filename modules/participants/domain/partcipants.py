@@ -1,4 +1,4 @@
-from models.auth import Auth
+from modules.auth.domain.auth import Auth
 from typing import Literal, List, Dict
 
 

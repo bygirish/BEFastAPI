@@ -25,7 +25,7 @@ class Participant(Auth):
     last_name: str
     personal_information: Dict[str, any] = None
     campaign_list: List[ParticipantCampaign]
-    user_type = 'participant'
+    user_type = 'participants'
 
 
 

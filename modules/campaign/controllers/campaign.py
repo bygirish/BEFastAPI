@@ -2,7 +2,7 @@ import http
 
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/campaign", tags=[])
+router = APIRouter(prefix="/campaign", tags=['Campaign'])
 
 
 @router.get("/v1")

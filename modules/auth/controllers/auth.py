@@ -11,7 +11,7 @@ from modules.auth.use_cases.auth import login_with_email_password_use_case, \
 from schemas.exceptions import ApplicationException
 from schemas.response import SuccessResponse, ErrorResponse, BaseResponse
 
-router = APIRouter(prefix="/auth", tags=[])
+router = APIRouter(prefix="/auth", tags=['Auth'])
 
 
 @router.post('/signup', summary="Create new user")

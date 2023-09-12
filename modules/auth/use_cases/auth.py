@@ -151,7 +151,7 @@ def authenticate_authorize_user_use_case(auth_token: str, allowed_user_roles: li
 
 
 def create_user_use_case(new_user: CreateUserSchema):
-    email_id, password = new_user.dict().values()
+    email_id, password = new_user.__dict__.values()
 
     print(email_id, password)
 
@@ -169,5 +169,5 @@ def create_user_use_case(new_user: CreateUserSchema):
     })
     create_user_repository(user)
     return {
-        "message": f'user create successfully {user}'
+        "message": f'user created successfully {user}'
     }

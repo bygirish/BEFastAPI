@@ -1,22 +1,36 @@
-from configs.dev_config import DevConfig
-from configs.env_config import EnvConfig
-from configs.prod_config import ProdConfig
+from configs.env import app_env
+
+__dynamodb_table_prefixes = {
+    "prod": "prod",
+    "dev": "dev",
+    "stage": "stage",
+    "local": "dev"
+}
 
 
-class AppConfig:
-    __envConfig: any = {}
-    __buildConfig: any = {}
+def dynamodb_table_prefix_config():
+    return __dynamodb_table_prefixes[app_env()]
 
-    def __init__(self):
-        self.__envConfig = EnvConfig().get_env_config()
-        env = self.__envConfig.get("env")
-        if env == "dev":
-            self.__buildConfig = DevConfig.getConfig()
-        elif env == "prod":
-            self.__buildConfig = ProdConfig.getConfig()
 
-    def get(self):
-        return {
-            **self.__envConfig,
-            **self.__buildConfig
-        }
+__env_config_prefixes = {
+    "prod": "prod",
+    "dev": "dev",
+    "stage": "stage",
+    "local": "dev"
+}
+
+
+def env_config_prefix_config():
+    return __env_config_prefixes[app_env()]
+
+
+__tld = {
+    "prod": "test.com",
+    "dev": "dev.test.com",
+    "stage": "stage.test.com",
+    "local": "local.test.com"
+}
+
+
+def cookie_domain_config():
+    return __tld[app_env()]

@@ -20,12 +20,13 @@ class ParticipantCampaign:
 
 
 class Participant(Auth):
-    id: str
+    participant_id: str
     first_name: str
     last_name: str
+    # user_type = 'participants'
     personal_information: Dict[str, any] = None
     campaign_list: List[ParticipantCampaign]
-    user_type = 'participants'
+
 
 
 

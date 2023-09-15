@@ -13,6 +13,7 @@ from modules.auth.utils.utils import create_access_token, \
     oauth2_scheme, \
     get_jwt_token_payload, TokenData, get_password_hash, authenticate_user_by_email_id
 from schemas.exceptions import ApplicationException, CustomHTTPException
+from utils.dynamodb import dynamo
 
 
 def login_with_phone_password_use_case(phone: str, password: str):

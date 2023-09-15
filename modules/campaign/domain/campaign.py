@@ -8,8 +8,16 @@ class CampaignType(str, Enum):
     QuizCampaign = "QuizCampaign"
 
 
+class AssociatedBusinessDetails:
+    account_id: str
+    business_title: str
+    created_at: int
+    created_by_id: str  # business member id
+    create_by_name: str  # business member name
+
+
 class Campaign:
-    id: str
+    campaign_id: str
     title: str
     description: str
     images: list[str] = []
@@ -23,4 +31,5 @@ class Campaign:
     status: Literal['active', 'inactive'] = 'inactive'
     type: CampaignType = None
 
-
+    associated_influencers: list[str] = []
+    associate_business_details: AssociatedBusinessDetails = None

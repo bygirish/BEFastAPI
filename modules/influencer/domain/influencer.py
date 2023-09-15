@@ -19,14 +19,15 @@ class InfluencerCampaign:
 
 
 class Influencer(Auth):
-    id: str
+    influencer_id: str
     first_name: str
     last_name: str
+    # user_type = 'influencer'
     category: str
     tags: list[str]
     platform_links: list[SocialPlatform]
     campaign_list: list[InfluencerCampaign]
-    user_type = 'influencer'
+
 
 
 

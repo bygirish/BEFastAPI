@@ -13,4 +13,4 @@ app.include_router(app_router)
 
 if __name__ == "__main__":
     logging.info("Starting fast api app for BE Service")
-    uvicorn.run(app="main:app", host="127.0.0.1", port=8080, reload=True)
+    uvicorn.run(app="main:app", host="127.0.0.1", port=8081, reload=True)

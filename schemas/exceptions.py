@@ -14,15 +14,18 @@ class ApplicationException(Exception):
 
 
 class CustomHTTPException(Exception):
-    def __init__(self, message="Http Exception", status_code=status.HTTP_401_UNAUTHORIZED, error=None):
+    def __init__(self, message="Http Exception", status_code=status.HTTP_401_UNAUTHORIZED,
+                 error=None):
         self.message = message
         self.status_code = status_code
         self.error = error
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=message,
-            error=error,
+            detail={
+                "message": message,
+                "error": error
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -1,25 +1,42 @@
+# from enum import Enum
 from enum import Enum
-from typing import Literal
+from typing import Literal, Union
 
 from pydantic import BaseModel
 
-
-class CheckAuthDetailsWithPhoneNumber(BaseModel):
-    phone_number: str
-    campaign_id: str
-    profile_type: str
+from modules.auth.domain.auth import ProfileType
+from modules.auth.domain.auth_otp import EmailOTPUseCases, PhoneOTPUseCases
 
 
-class PhoneOTPUseCases(Enum):
-    login: 'login'
-    signup: 'signup'
-    change: 'change'
+class CheckAuthDetailsWithEmailId(BaseModel):
+    email_id: str
+    campaign_id: Union[str, None]
+    # profile_type: str
 
 
-class PhoneOTPUseCases(Enum):
-    login: 'login'
-    signup: 'signup'
-    change: 'change'
+class CreateUserLeadWithEmailId(BaseModel):
+    email_id: str
+    password: str
+    first_name: str
+    last_name: str
+
+    profile_type: ProfileType
+    campaign_id: Union[str, None]
+
+    def get_dict(self):
+        return self.__dict__
+
+
+class SendEmailOTPSchema(BaseModel):
+    email_id: str
+    use_case: EmailOTPUseCases
+
+
+class VerifyEmailOTPSchema(BaseModel):
+    email_id: str
+    use_case: EmailOTPUseCases
+    otp: str
+    session_id: str
 
 
 class SendPhoneOTPSchema(BaseModel):
@@ -30,8 +47,6 @@ class SendPhoneOTPSchema(BaseModel):
 class VerifyPhoneOTPSchema(BaseModel):
     phone_number: str
     use_case: PhoneOTPUseCases
-
-
 
 
 # class AuthRecordSchema(BaseModel):

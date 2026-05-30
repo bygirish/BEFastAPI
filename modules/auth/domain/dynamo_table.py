@@ -96,7 +96,7 @@ def create_lead_table():
         'TableName': table_name,
         'KeySchema': [
             {'AttributeName': 'lead_id', 'KeyType': 'HASH'},
-            # {'AttributeName': 'updated_at', 'KeyType': 'RANGE'}
+            {'AttributeName': 'updated_at', 'KeyType': 'RANGE'}
         ],
         'AttributeDefinitions': [
             {'AttributeName': 'lead_id', 'AttributeType': 'S'},
@@ -193,7 +193,7 @@ def create_email_otp_table():
                         'KeyType': 'HASH'
                     },
                     {
-                        'AttributeName': 'sent_at',
+                        'AttributeName': 'updated_at',
                         'KeyType': 'RANGE'
                     }
                 ],

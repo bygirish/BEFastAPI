@@ -2,9 +2,10 @@
 from enum import Enum
 from typing import Literal, Union
 
+import pydantic
 from pydantic import BaseModel
 
-from modules.auth.domain.auth import ProfileType
+from modules.auth.domain.auth import ProfileType, Auth
 from modules.auth.domain.auth_otp import EmailOTPUseCases, PhoneOTPUseCases
 
 
@@ -37,6 +38,10 @@ class VerifyEmailOTPSchema(BaseModel):
     use_case: EmailOTPUseCases
     otp: str
     session_id: str
+
+
+class UpdateAuthProfileData(BaseModel):
+    profile_data: pydantic.dataclasses.dataclass(Auth)
 
 
 class SendPhoneOTPSchema(BaseModel):

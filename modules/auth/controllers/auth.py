@@ -1,18 +1,23 @@
 import http
-from typing import Union, Annotated
+from typing import Union, Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from modules.auth.domain.auth import Auth
 from modules.auth.dtos.request import LoginWithEmailPasswordCreds, CreateUserSchema, \
     SendPhoneOTPSchema, VerifyPhoneOTPSchema, SendEmailOTPSchema, \
-    VerifyEmailOTPSchema, CheckAuthDetailsWithEmailId, CreateUserLeadWithEmailId
+    VerifyEmailOTPSchema, CheckAuthDetailsWithEmailId, CreateUserLeadWithEmailId, \
+    UpdateAuthProfileData
 from modules.auth.use_cases.auth import login_with_email_password_use_case, \
-    get_current_user_use_case, create_user_use_case, check_user_exists_with_email_id_use_case, \
-    create_user_lead_with_email_id_use_case, send_email_otp_use_case, verify_email_otp_use_case
+    get_current_user_use_case, check_user_exists_with_email_id_use_case, \
+    create_user_lead_with_email_id_use_case, send_email_otp_use_case, verify_email_otp_use_case, \
+    update_auth_profile_data_use_case, get_auth_profile_data_use_case
 from schemas.exceptions import ApplicationException
 from schemas.response import SuccessResponse, ErrorResponse, BaseResponse
+from utils.s3.s3 import s3_upload_file_object, s3_download
+from utils.time_utils import get_current_timestamp
 
 router = APIRouter(prefix="/auth", tags=['Auth'])
 
@@ -137,6 +142,50 @@ def verify_email_otp(req_body: VerifyEmailOTPSchema):
         ], ae.status_code).json_response()
 
 
+@router.get('/auth-profile/email/{email_id}',
+            summary="get auth profile using email id")
+@router.get('/auth-profile/{user_id}',
+            summary="get auth profile using user id")
+def get_auth_profile_data(user_id: Union[str, None] = None, email_id: Union[str, None] = None):
+    """
+        - get profile data
+
+    """
+    try:
+        print("email_id", email_id)
+        print("user_id", user_id)
+
+        result = get_auth_profile_data_use_case(user_id, email_id)
+        return SuccessResponse(result).json_response()
+    except ApplicationException as ae:
+        print("Exception ", ae, ae.status_code, ae.error)
+        return ErrorResponse([
+            ae.__str__(),
+            ae.error
+        ], ae.status_code).json_response()
+
+
+@router.patch('/update-auth-profile-data',
+              summary="update auth profile data")
+def update_auth_profile_data(req_body: UpdateAuthProfileData):
+    """
+        - update profile data
+
+    """
+    try:
+        profile_data = req_body.profile_data
+        print("profile_data", profile_data)
+        result = update_auth_profile_data_use_case(profile_data)
+        return SuccessResponse(result).json_response()
+    except ApplicationException as ae:
+        print("Exception ", ae, ae.status_code, ae.error)
+        return ErrorResponse([
+            ae.__str__(),
+            ae.error
+        ], ae.status_code).json_response()
+
+
+
 @router.post('/send-phone-otp',
              summary="Send Phone OTP for different cases")
 def send_phone_otp(req_body: SendPhoneOTPSchema):
@@ -226,40 +275,40 @@ def update_password(password: str):
         ], ae.status_code).json_response()
 
 
-@router.post('/verify-password',
-             summary="verify password")
-def verify_password(password: str):
-    """
-        - verify the entered password with the password present in the auth record
-
-        response:
-        - success
-        - failure
-    """
-    try:
-        resp = {
-            "status": "Success"  # "Success" | "Failure"
-        }
-        return SuccessResponse(resp).json_response()
-    except ApplicationException as ae:
-        print("Exception ", ae)
-        return ErrorResponse([
-            ae.__str__()
-        ], ae.status_code).json_response()
-
-# @router.post("/v1/login/email-password")
-# def loginWithEmailPassword(creds: LoginWithEmailPasswordCreds):
-#     """"""
-#     try:
-#         email, password = creds.dict().values()
-#         print("email, password", email, password)
-#         resp = login_with_email_password_use_case(email, password)
+# @router.post('/verify-password',
+#              summary="verify password")
+# def verify_password(password: str):
+#     """
+#         - verify the entered password with the password present in the auth record
 #
+#         response:
+#         - success
+#         - failure
+#     """
+#     try:
+#         resp = {
+#             "status": "Success"  # "Success" | "Failure"
+#         }
 #         return SuccessResponse(resp).json_response()
 #     except ApplicationException as ae:
+#         print("Exception ", ae)
 #         return ErrorResponse([
 #             ae.__str__()
 #         ], ae.status_code).json_response()
+
+@router.post("/v1/login/email-password")
+def loginWithEmailPassword(creds: LoginWithEmailPasswordCreds):
+    """"""
+    try:
+        email, password = creds.dict().values()
+        print("email, password", email, password)
+        resp = login_with_email_password_use_case(email, password)
+
+        return SuccessResponse(resp).json_response()
+    except ApplicationException as ae:
+        return ErrorResponse([
+            ae.__str__()
+        ], ae.status_code).json_response()
 #
 
 # @router.get("/v1/user/me")

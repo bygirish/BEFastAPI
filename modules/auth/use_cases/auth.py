@@ -10,7 +10,7 @@ from modules.auth.domain.auth_otp import EmailOTP, EmailOTPUseCases
 from modules.auth.domain.lead import Lead
 from modules.auth.repositories.auth import get_user_by_email_id_repository, \
     create_user_lead_with_email_id_repository, \
-    get_auth_user_with_email_id_repository, get_user_lead_with_email_id_repository, \
+    get_auth_user_repository, get_user_lead_with_email_id_repository, \
     create_sent_email_otp_repository, get_sent_email_otp_by_session_id_repository, \
     update_user_lead_repository, \
     create_auth_user_repository, get_sent_email_otp_by_email_id_repository
@@ -30,7 +30,7 @@ from operator import itemgetter
 
 
 def check_user_exists_with_email_id_use_case(email_id: str):
-    auth_record = get_auth_user_with_email_id_repository(email_id)
+    auth_record = get_auth_user_repository(None, email_id)
     lead_record = get_user_lead_with_email_id_repository(email_id)
 
     is_lead_user = False
@@ -94,7 +94,8 @@ def send_email_otp_use_case(payload: SendEmailOTPSchema):
     past_sent_otps = get_sent_email_otp_by_email_id_repository(email_id, 60)
 
     if past_sent_otps is not None and len(past_sent_otps) > 0:
-        raise ApplicationException("Please wait for 1 minute since last attempt", status.HTTP_425_TOO_EARLY)
+        raise ApplicationException("Please wait for 1 minute since last attempt",
+                                   status.HTTP_425_TOO_EARLY)
 
     email_otp_object = EmailOTP(**{
         "email_id": email_id,
@@ -109,7 +110,7 @@ def send_email_otp_use_case(payload: SendEmailOTPSchema):
     is_created = create_sent_email_otp_repository(email_otp_object)
 
     if is_created:
-        send_signup_otp(email_id, otp)
+        # send_signup_otp(email_id, otp)
         return {
             "session_id": session_id,
             "message": "OTP sent successfully"
@@ -121,79 +122,106 @@ def verify_email_otp_use_case(payload: VerifyEmailOTPSchema):
     use_case = payload.use_case
     otp = payload.otp
     session_id = payload.session_id
-    print("payload", payload)
-    latest_otp_record = get_sent_email_otp_by_session_id_repository(session_id, email_id)
-    print("latest_otp_record", latest_otp_record)
-    sent_otp, is_verified = (latest_otp_record["otp"], latest_otp_record["is_verified"]) if latest_otp_record is not None else (None, False)
+    otp_records = get_sent_email_otp_by_session_id_repository(session_id, email_id)
+
+    print("otp_records", otp_records)
+    if otp_records is not None and len(otp_records) > 1:
+        # log this issue
+        pass
+
+    latest_otp_record = otp_records[0] if otp_records else None
+    sent_otp, is_verified = (latest_otp_record["otp"], latest_otp_record[
+        "is_verified"]) if latest_otp_record is not None else (None, False)
     print("latest_otp_record", latest_otp_record, sent_otp == otp)
 
-    if sent_otp is None or (sent_otp is not None and is_verified is True):
+    if sent_otp is None:
         raise CustomHTTPException('no sent otp found', status.HTTP_404_NOT_FOUND)
-
     else:
-        if sent_otp == otp and is_verified is False:
+        if sent_otp == otp and is_verified is True:
+            raise ApplicationException("otp already verified", status.HTTP_409_CONFLICT)
+        elif sent_otp != otp and is_verified is True:
+            raise ApplicationException("otp already verified, trying again with wrong otp",
+                                       status.HTTP_409_CONFLICT)
+        elif sent_otp != otp and is_verified is False:
+            return {
+                "is_verified": False,
+                "message": "incorrect otp"
+            }
+        elif sent_otp == otp and is_verified is False:
+            # OTP Verification timeout logic to be written
+
             if use_case.value == EmailOTPUseCases.sign_up.value:
-                # create_auth_record
-                # update_lead_record
-                # generate token
                 latest_otp_record.update({
                     "is_verified": True,
                     "verified_at": get_current_timestamp(),
                     "updated_at": get_current_timestamp(),
                 })
-                lead_record_dict = get_user_lead_with_email_id_repository(email_id)
+                result = __convert_lead_to_auth_user_after_otp_verification(email_id,
+                                                                            latest_otp_record)
 
-                if lead_record_dict is not None:
+                result.update({
+                    "is_verified": True,
+                })
 
-                    lead_record_dict['is_email_id_verified'] = True
-                    lead_record = Lead(**lead_record_dict)
+                return result
 
-                    auth_record_dict = {**lead_record_dict}
-                    auth_record_dict['user_id'] = auth_record_dict.pop('lead_id')
-                    auth_record = Auth(**auth_record_dict)
+            return None
 
-                    update_otp_verification_transaction_item = {
-                            "action": "Put",
-                            "TableName": EmailOTP.get_table_name(),
-                            "Item": latest_otp_record
-                        }
 
-                    response, st = create_auth_user_repository(auth_record, lead_record, [update_otp_verification_transaction_item])
+def __convert_lead_to_auth_user_after_otp_verification(email_id, latest_otp_record):
+    # create_auth_record
+    # update_lead_record
+    # generate token
+    lead_record_dict = get_user_lead_with_email_id_repository(email_id)
 
-                    if st is True:
-                        # generate auth token
-                        access_token = create_access_token(
-                            data={"sub": json.dumps({
-                                "email_id": email_id,
-                                "user_id": auth_record.user_id,
-                            })}
-                        )
-                        return {
-                            "access_token": access_token,
-                            "message": "OTP verified. Auth account created successfully",
-                        }
-                    else:
-                        return {
-                            "message": "OTP couldn't be verified. Auth account couldn't be created",
-                        }
-                else:
-                    raise CustomHTTPException('no lead record found for the email id',
-                                              status.HTTP_404_NOT_FOUND)
+    if lead_record_dict is not None:
 
-            return True
+        lead_record_dict['is_email_id_verified'] = True
+        lead_record = Lead(**lead_record_dict)
+
+        auth_record_dict = {**lead_record_dict}
+        auth_record_dict['user_id'] = auth_record_dict.pop('lead_id')
+        auth_record = Auth(**auth_record_dict)
+
+        update_otp_verification_transaction_item = {
+            "action": "Put",
+            "TableName": EmailOTP.get_table_name(),
+            "Item": latest_otp_record
+        }
+
+        response, st = create_auth_user_repository(auth_record, lead_record,
+                                                   [update_otp_verification_transaction_item])
+
+        if st is True:
+            # generate auth token
+            access_token = create_access_token(
+                data={"sub": json.dumps({
+                    "email_id": email_id,
+                    "user_id": auth_record.user_id,
+                })}
+            )
+            return {
+                "access_token": access_token,
+                "message": "OTP verified. Auth account created successfully",
+            }
         else:
-            return False
-
-    # is_created = send_email_otp_repository(email_otp_object)
-    #
-    # if is_created:
-    #     send_signup_otp(email_id, otp)
-    #     return {
-    #         "message": "OTP sent successfully"
-    #     }
+            raise CustomHTTPException("OTP couldn't be verified. Auth account couldn't be created",
+                                      status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        raise CustomHTTPException('no lead record found for the email id',
+                                  status.HTTP_404_NOT_FOUND)
 
 
-def __convert_lead_to_auth_user():
+def get_auth_profile_data_use_case(user_id: str = None, email_id: str = None):
+    if user_id is None and email_id is None:
+        raise ApplicationException("either user_id or email_id should be passed", status.HTTP_400_BAD_REQUEST)
+    auth_record = get_auth_user_repository(user_id, email_id)
+    # auth_ob = Auth(**auth_record)
+    # print("auth_ob", auth_ob)
+    return auth_record
+
+
+def update_auth_profile_data_use_case(profile_data):
     pass
 
 
@@ -240,27 +268,27 @@ async def get_current_user_use_case(token: Annotated[str, Depends(oauth2_scheme)
     return user
 
 
-def create_user_use_case(new_user: CreateUserSchema):
-    email_id, password = new_user.__dict__.values()
-
-    print(email_id, password)
-
-    user = get_user_by_email_id_repository(email_id)
-    if user is not None:
-        raise ApplicationException(
-            "User with this email already exist",
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-    user = Auth(**{
-        'user_id': str(uuid4()),
-        'email_id': email_id,
-        'hashed_password': get_password_hash(password),
-    })
-    create_user_repository(user)
-    return {
-        "message": f'user created successfully {user}'
-    }
+# def create_user_use_case(new_user: CreateUserSchema):
+#     email_id, password = new_user.__dict__.values()
+#
+#     print(email_id, password)
+#
+#     user = get_user_by_email_id_repository(email_id)
+#     if user is not None:
+#         raise ApplicationException(
+#             "User with this email already exist",
+#             status.HTTP_400_BAD_REQUEST,
+#         )
+#
+#     user = Auth(**{
+#         'user_id': str(uuid4()),
+#         'email_id': email_id,
+#         'hashed_password': get_password_hash(password),
+#     })
+#     create_user_repository(user)
+#     return {
+#         "message": f'user created successfully {user}'
+#     }
 
 
 def login_with_phone_password_use_case(phone: str, password: str):

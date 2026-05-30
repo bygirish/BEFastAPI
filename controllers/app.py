@@ -6,6 +6,7 @@ from modules.campaign.controllers import campaign
 from modules.influencer.controllers import influencer
 from modules.participants.controllers import partcipants
 from modules.participation.controllers import participation
+from modules.file.controllers import file
 
 
 def get_app_router():
@@ -16,4 +17,5 @@ def get_app_router():
     router.include_router(influencer.router)
     router.include_router(partcipants.router)
     router.include_router(participation.router)
+    router.include_router(file.router)
     return router

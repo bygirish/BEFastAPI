@@ -14,13 +14,22 @@ from utils.dynamodb import dynamo
 from utils.time_utils import get_current_timestamp
 
 
-def get_auth_user_with_email_id_repository(email_id: str):
+def get_auth_user_repository(user_id: str = None, email_id: str = None):
     query_args = {
-        "IndexName": "email_id_idx",
-        "KeyConditionExpression": Key("email_id").eq(email_id),
         "ScanIndexForward": False,
         "Limit": 1,
     }
+
+    if user_id is not None:
+        query_args.update({
+            "KeyConditionExpression": Key("user_id").eq(user_id),
+        })
+    elif email_id is not None:
+        query_args.update({
+            "IndexName": "email_id_idx",
+            "KeyConditionExpression": Key("email_id").eq(email_id),
+        })
+
 
     records, st = dynamo.query(Auth.get_table_name(), **query_args)
     if st is True:
@@ -136,7 +145,7 @@ def get_sent_email_otp_by_session_id_repository(session_id: str, email_id: str =
         "KeyConditionExpression": Key("session_id").eq(session_id),
         "FilterExpression": Attr("email_id").eq(email_id),  # if email_id is not None else "",
         "ScanIndexForward": False,
-        "Limit": 1,
+        # "Limit": 1,
     }
     records, st = dynamo.query(EmailOTP.get_table_name(), **query_args)
     if st is True:
@@ -144,11 +153,12 @@ def get_sent_email_otp_by_session_id_repository(session_id: str, email_id: str =
         if n_records == 0:
             return None
         else:
+            return records
             # if n_records > 1:
             #     logging.exception({
             #
             #     })
-            return records[0]
+            # return records[0]
     else:
         raise ApplicationException("Failed in: get_sent_email_otp_repository",
                                    400, records)

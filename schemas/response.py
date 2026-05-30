@@ -1,9 +1,18 @@
+import json
+from _decimal import Decimal
 from http import HTTPStatus
 
 from pydantic import BaseModel
 import typing as t
 
 from fastapi.responses import JSONResponse
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj: t.Any) -> t.Any:
+        if isinstance(obj, Decimal):
+            return int(obj)
+        return json.JSONEncoder.default(self, obj)
 
 
 class BaseResponse:
@@ -17,11 +26,16 @@ class BaseResponse:
 
     def json_response(self, response_data={}):
         print(f'response_data is {response_data}')
+
+        content = {
+            **response_data,
+            "status": self.status
+        }
+
+        content_json = json.loads(json.dumps(content, cls=CustomJSONEncoder))
+
         return JSONResponse(
-            content={
-                **response_data,
-                "status": self.status
-            },
+            content=content_json,
             status_code=self.status_code
         )
 

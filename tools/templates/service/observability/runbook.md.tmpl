@@ -1,0 +1,8 @@
+# {{Service}} runbook
+
+One `##` section per alert. The section id is used as the alert's `runbook_url` anchor.
+
+## {{service}}-availability-burn
+**Symptom:** error budget for availability is burning fast.
+**First checks:** Grafana → "Service" dashboard (`app_service={{service}}`) → error ratio panel → exemplar → trace → logs.
+**Mitigation:** _fill in_

@@ -1,0 +1,9 @@
+"""Public contract of the {{service}} service. Additive changes only within a major version (rule C-10)."""
+
+from {{service}}_contracts.api import {{Service}}Api
+from {{service}}_contracts.dto import PingResult
+from {{service}}_contracts.errors import {{Service}}Unavailable
+from {{service}}_contracts.events import PingReceived
+from {{service}}_contracts.http_client import {{Service}}HttpClient
+
+__all__ = ["PingReceived", "PingResult", "{{Service}}Api", "{{Service}}HttpClient", "{{Service}}Unavailable"]

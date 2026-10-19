@@ -1,0 +1,11 @@
+"""HTTP-only models (rule L-5): never reuse ORM models or contract DTOs as request/response bodies."""
+
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class PingResponse(BaseModel):
+    service: str
+    message: str
+    at: datetime

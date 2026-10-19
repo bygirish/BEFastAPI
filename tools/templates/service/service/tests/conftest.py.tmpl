@@ -1,0 +1,8 @@
+import pytest
+
+from platform_observability import testing as obs_testing
+
+
+@pytest.fixture(scope="session", autouse=True)
+def telemetry() -> obs_testing.Telemetry:
+    return obs_testing.install()

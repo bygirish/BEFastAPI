@@ -1,0 +1,18 @@
+"""/internal/v1/{{service}}/… mirrors {{service}}_contracts.api 1:1; called by {{Service}}HttpClient after extraction."""
+
+from fastapi import APIRouter, Depends
+
+from {{service}}_contracts import PingResult
+from {{service}}_service.api.deps import PingUseCase, require_service_principal
+
+router = APIRouter(
+    prefix="/internal/v1/{{service}}",
+    tags=["{{service}}-internal"],
+    dependencies=[Depends(require_service_principal)],
+    include_in_schema=False,
+)
+
+
+@router.get("/ping", response_model=PingResult)
+async def ping(use_case: PingUseCase) -> PingResult:
+    return await use_case()

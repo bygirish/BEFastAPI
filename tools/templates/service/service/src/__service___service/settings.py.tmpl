@@ -1,0 +1,9 @@
+from pydantic_settings import SettingsConfigDict
+
+from platform_core.settings import ServiceSettings
+
+
+class {{Service}}Settings(ServiceSettings):
+    """{{SERVICE}}_* environment variables. Never read by other services (rule X-4)."""
+
+    model_config = SettingsConfigDict(env_prefix="{{SERVICE}}_", extra="ignore")

@@ -1,0 +1,24 @@
+"""FastAPI dependencies. This layer is the only one allowed to use Depends (rule L-6)."""
+
+from typing import Annotated
+
+from fastapi import Depends, Request
+
+from platform_core.errors import ForbiddenError
+from platform_security import CurrentPrincipal, Principal, PrincipalKind
+from {{service}}_service.application.services.ping import Ping
+
+
+def get_ping(request: Request) -> Ping:
+    ping: Ping = request.app.state.container.resolve(Ping)
+    return ping
+
+
+PingUseCase = Annotated[Ping, Depends(get_ping)]
+
+
+async def require_service_principal(principal: CurrentPrincipal) -> Principal:
+    """Internal routes are for other services only (rule X-9)."""
+    if principal.kind is not PrincipalKind.SERVICE:
+        raise ForbiddenError("Internal endpoint")
+    return principal

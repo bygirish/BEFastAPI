@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.17"
+
+jobs:
+  static:
+    name: lint · types · architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - name: Ruff (lint + format)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Generated files are in sync
+        run: uv run python tools/sync_workspace.py --check
+      - name: mypy --strict
+        run: make typecheck
+      - name: Architecture contracts (import-linter)
+        run: uv run lint-imports
+
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: echo "targets=$(python3 tools/list_packages.py --test-targets)" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: test · ${{ matrix.target.name }}
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.discover.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      # B-6: each package is tested with ONLY its own dependency closure installed.
+      - run: uv run --frozen --isolated --package ${{ matrix.target.name }} pytest ${{ matrix.target.path }} -q
+
+  scaffold:
+    name: scaffold smoke (template rot guard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - run: ./tools/scaffold_check.sh

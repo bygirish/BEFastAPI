@@ -1,0 +1,9 @@
+# Review ownership. Replace the placeholder handle with the real GitHub user/team.
+# Architecture guardrails need architecture-owner approval (docs/architecture/STANDARDS.md B-8, §9).
+*                          @bygirish
+/libs/                     @bygirish
+/docs/architecture/        @bygirish
+/tools/                    @bygirish
+/.importlinter             @bygirish
+# Each service gets its own owner line when it is created:
+# /services/auth/          @auth-team

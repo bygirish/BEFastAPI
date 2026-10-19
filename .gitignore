@@ -1,0 +1,195 @@
+# =============================================================================
+# BEFastAPI .gitignore
+# Rule of thumb: commit source, config templates and lock files; never commit
+# secrets, local state, caches, build output, or anything a tool can regenerate.
+# Intentionally COMMITTED (do not ignore): uv.lock, .python-version, .importlinter,
+# .env.example, .github/, docs/, tools/templates/
+# =============================================================================
+
+# ----------------------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+sdist/
+pip-wheel-metadata/
+__pypackages__/
+*.manifest
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments (uv creates .venv at the workspace root)
+.venv/
+venv/
+/env/
+/ENV/
+.python-version.local
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+.hypothesis/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.cache/
+.uv-cache/
+
+# Test / coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+junit*.xml
+test-results/
+.junit/
+*.prof
+*.pstats
+
+# Notebooks / scratch
+.ipynb_checkpoints/
+profile_default/
+
+# ----------------------------------------------------------------------------- Secrets & environment (NEVER commit)
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+.envrc
+
+# Keys, certificates, credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret
+*.secrets
+/secrets/
+/.secrets/
+dev-secrets/
+credentials*.json
+service-account*.json
+*-credentials.json
+.aws/
+.gcloud/
+.azure/
+.netrc
+id_rsa*
+id_ed25519*
+deploy/keys/*
+!deploy/keys/.gitkeep
+
+# InsForge CLI project state (holds project keys)
+.insforge/
+
+# ----------------------------------------------------------------------------- Local data & containers
+# Local databases and dumps
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.dump
+*.rdb
+/pgdata/
+/postgres-data/
+/redis-data/
+/data/
+
+# Docker / compose: volumes and per-developer overrides (compose.dev.yaml IS committed)
+.docker/
+docker-compose.override.yml
+docker-compose.override.yaml
+compose.override.yml
+compose.override.yaml
+/volumes/
+
+# Generated observability assets (assembled by tools/sync_observability.py)
+deploy/observability/generated/
+deploy/observability/**/data/
+
+# ----------------------------------------------------------------------------- Logs & temp
+*.log
+/logs/
+/log/
+/tmp/
+/temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+.#*
+
+# ----------------------------------------------------------------------------- Editors & IDEs
+.idea/
+*.iml
+.vscode/
+.fleet/
+.history/
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# ----------------------------------------------------------------------------- Operating systems
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Trash-*
+*.lnk
+
+# ----------------------------------------------------------------------------- AI coding tools (local state only)
+# Shared project settings (.claude/settings.json) may be committed; local/machine state may not.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/routines/.state/
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/agent-registry.json
+.claude/agent-memory-local
+.claude/first-run
+.claude/assistant-daemon-state.json
+CLAUDE.local.md
+.cursor/
+.aider*
+
+# ----------------------------------------------------------------------------- JS tooling (pyright, markdown linters, frontends)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# ----------------------------------------------------------------------------- Scaffold leftovers
+# tools/scaffold_check.sh creates and removes these; guards against an interrupted run being committed.
+/services/scaffoldcheck/
+/apps/scaffoldcheck_api/

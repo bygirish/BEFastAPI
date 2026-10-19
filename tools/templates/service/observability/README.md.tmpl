@@ -1,0 +1,23 @@
+# {{Service}} — observability catalog
+
+Assets in this folder travel with the service when it is extracted (rule O-8).
+
+| File | Purpose |
+|---|---|
+| `slo.yaml` | SLIs/SLOs; `tools/gen_slo_rules.py` turns it into burn-rate alert rules |
+| `alerts.rules.yaml` | Hand-written cause alerts (generated SLO rules are emitted separately) |
+| `dashboards/` | Grafana dashboards (JSON), provisioned as code |
+| `runbook.md` | One section per alert; every alert's `runbook_url` points here |
+
+## Metrics (business)
+| Name | Type | Attributes (closed sets) | Meaning |
+|---|---|---|---|
+| `{{service}}.ping.received` | counter | `outcome` ∈ {ok} | SAMPLE — replace |
+
+RED metrics (`http.server.request.duration`, …) are automatic and carry `app.service={{service}}`.
+
+## Log events (constant `event` names)
+`ping_handled`, plus `http_request_completed` / `request_failed` from the platform.
+
+## Spans
+`{{service}}.Ping` (use case), `{{service}}_contracts.{{Service}}Api.ping` (contract call), `events.publish {{service}}.ping_received.v1`.

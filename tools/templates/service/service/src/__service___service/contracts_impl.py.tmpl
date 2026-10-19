@@ -1,0 +1,16 @@
+"""In-process implementation of {{service}}_contracts.api (used while the service lives in the monolith)."""
+
+from platform_observability import traced_contract_call
+from {{service}}_contracts import PingResult
+from {{service}}_service.application.services.ping import Ping
+
+_CONTRACT = "{{service}}_contracts.{{Service}}Api"
+
+
+class {{Service}}ApiImpl:
+    def __init__(self, ping: Ping) -> None:
+        self._ping = ping
+
+    @traced_contract_call(_CONTRACT)
+    async def ping(self) -> PingResult:
+        return await self._ping()

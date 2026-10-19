@@ -1,0 +1,12 @@
+# SLO definitions for the {{service}} service (see docs/architecture/OBSERVABILITY.md §8).
+service: {{service}}
+slos:
+  - name: availability
+    description: Non-5xx responses on public routes (4xx excluded)
+    objective: 99.9
+    window: 30d
+  - name: latency
+    description: Requests faster than the threshold on public routes
+    objective: 99.0
+    window: 30d
+    threshold_seconds: 0.5

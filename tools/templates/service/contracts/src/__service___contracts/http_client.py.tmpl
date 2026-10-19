@@ -1,0 +1,20 @@
+"""HTTP implementation of the contract, used after the service is extracted (docs/architecture §6.1)."""
+
+from platform_http import ServiceHttpClient
+from platform_observability import traced_contract_call
+from {{service}}_contracts.dto import PingResult
+from {{service}}_contracts.errors import {{Service}}Unavailable
+
+_CONTRACT = "{{service}}_contracts.{{Service}}Api"
+
+
+class {{Service}}HttpClient:
+    def __init__(self, client: ServiceHttpClient) -> None:
+        self._client = client
+
+    @traced_contract_call(_CONTRACT)
+    async def ping(self) -> PingResult:
+        response = await self._client.request("GET", "/internal/v1/{{service}}/ping")
+        if response.status_code != 200:
+            raise {{Service}}Unavailable(details={"status": response.status_code})
+        return PingResult.model_validate(response.json())

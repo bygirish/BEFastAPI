@@ -1,0 +1,8 @@
+"""Contract-level errors. The in-process implementation raises the same ones as the HTTP client (rule C-4)."""
+
+from platform_core.errors import UnavailableError
+
+
+class {{Service}}Unavailable(UnavailableError):
+    default_code = "{{SERVICE}}_UNAVAILABLE"
+    default_message = "The {{service}} service is unavailable."

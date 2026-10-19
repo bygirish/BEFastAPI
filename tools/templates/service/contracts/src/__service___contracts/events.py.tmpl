@@ -1,0 +1,13 @@
+"""Versioned integration events: past-tense facts, IDs + minimal fields (rules C-6, C-8)."""
+
+from typing import ClassVar
+
+from platform_events import IntegrationEvent
+
+
+class PingReceived(IntegrationEvent):
+    """SAMPLE event — replace with real facts."""
+
+    EVENT_NAME: ClassVar[str] = "{{service}}.ping_received.v1"
+
+    message: str

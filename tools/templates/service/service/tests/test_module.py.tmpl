@@ -1,0 +1,61 @@
+"""Module-level tests: the service works alone, behind its own database (rules B-6, T-2)."""
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+
+from platform_http import create_application
+from platform_observability import testing as obs_testing
+from platform_security.testing import TestAuth
+from {{service}}_service.infrastructure.db.models import metadata, outbox_table
+from {{service}}_service.module import {{Service}}Module
+from {{service}}_service.settings import {{Service}}Settings
+
+
+@pytest.fixture
+async def module(tmp_path):  # type: ignore[no-untyped-def]
+    settings = {{Service}}Settings(database_url=f"sqlite+aiosqlite:///{tmp_path}/{{service}}.db")
+    module = {{Service}}Module(settings)
+    async with module.engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
+    return module
+
+
+@pytest.fixture
+def auth() -> TestAuth:
+    return TestAuth()
+
+
+@pytest.fixture
+async def client(module: {{Service}}Module, auth: TestAuth):  # type: ignore[no-untyped-def]
+    app = create_application(
+        title="t", service_name="{{service}}-tests", modules=[module], telemetry=False,
+        jwt_verifier=auth.verifier, relay_interval_seconds=0.05,
+    )
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+            yield c
+
+
+async def test_ping_flows_through_use_case_outbox_and_telemetry(
+    client: AsyncClient, module: {{Service}}Module, telemetry: obs_testing.Telemetry
+) -> None:
+    telemetry.clear()
+    response = await client.get("/api/v1/{{service}}/ping")
+    assert response.status_code == 200 and response.json()["message"] == "pong"
+
+    async with module.sessions() as session:
+        rows = (await session.execute(select(outbox_table))).mappings().all()
+    assert [r["event_name"] for r in rows] == ["{{service}}.ping_received.v1"]
+    assert "{{service}}.Ping" in telemetry.span_names()  # use-case span
+
+
+async def test_internal_routes_require_a_service_principal(client: AsyncClient, auth: TestAuth) -> None:
+    assert (await client.get("/internal/v1/{{service}}/ping")).status_code == 401
+    assert (await client.get("/internal/v1/{{service}}/ping", headers=auth.headers())).status_code == 403
+    assert (await client.get("/internal/v1/{{service}}/ping", headers=auth.service_headers())).status_code == 200
+
+
+async def test_readiness_reports_database(client: AsyncClient) -> None:
+    body = (await client.get("/readyz")).json()
+    assert body["modules"][0]["checks"][0] == {"name": "database", "status": "ok", "detail": None}

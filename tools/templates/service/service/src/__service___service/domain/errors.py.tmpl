@@ -1,0 +1,7 @@
+"""Domain errors: plain Python, service-prefixed codes (rule X-3). No framework imports (rule L-2)."""
+
+from platform_core.errors import AppError
+
+
+class {{Service}}DomainError(AppError):
+    default_code = "{{SERVICE}}_ERROR"

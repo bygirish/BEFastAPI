@@ -1,0 +1,9 @@
+"""Tables owned by this service live in its own schema (rules D-1, D-2)."""
+
+from platform_core.db import make_metadata
+from platform_events import make_outbox_table
+
+SCHEMA = "{{service}}"
+
+metadata = make_metadata(SCHEMA)
+outbox_table = make_outbox_table(metadata)

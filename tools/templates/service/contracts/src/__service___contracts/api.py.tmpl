@@ -1,0 +1,11 @@
+"""What other services may ask of {{service}}. Coarse-grained, batchable, DTOs only (rules C-2, C-3)."""
+
+from typing import Protocol
+
+from {{service}}_contracts.dto import PingResult
+
+
+class {{Service}}Api(Protocol):
+    async def ping(self) -> PingResult:
+        """SAMPLE method — replace with real operations."""
+        ...

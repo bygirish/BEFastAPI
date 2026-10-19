@@ -1,0 +1,13 @@
+from fastapi import APIRouter
+
+from {{service}}_service.api.deps import PingUseCase
+from {{service}}_service.api.v1.schemas import PingResponse
+
+router = APIRouter(prefix="/api/v1/{{service}}", tags=["{{service}}"])
+
+
+@router.get("/ping", response_model=PingResponse)
+async def ping(use_case: PingUseCase) -> PingResponse:
+    """SAMPLE route — thin: parse → one use case → map → return (rule L-4)."""
+    result = await use_case()
+    return PingResponse(service=result.service, message=result.message, at=result.at)

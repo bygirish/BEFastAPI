@@ -1,0 +1,60 @@
+"""The single door used by the composition root (docs/architecture §4.2)."""
+
+from collections.abc import Sequence
+
+from fastapi import APIRouter
+from sqlalchemy import text
+
+from platform_core.clock import SystemClock
+from platform_core.container import Container
+from platform_core.health import CheckResult, HealthReport, HealthStatus
+from platform_events import OutboxStore, SqlOutboxStore
+from platform_http import BaseServiceModule
+from {{service}}_contracts import {{Service}}Api
+from {{service}}_service.api.internal.router import router as internal_router
+from {{service}}_service.api.v1.router import router as public_router
+from {{service}}_service.application.services.ping import Ping
+from {{service}}_service.contracts_impl import {{Service}}ApiImpl
+from {{service}}_service.infrastructure.db.engine import build_engine
+from {{service}}_service.infrastructure.db.models import outbox_table
+from {{service}}_service.infrastructure.db.uow import SqlUnitOfWork
+from {{service}}_service.settings import {{Service}}Settings
+
+
+class {{Service}}Module(BaseServiceModule):
+    name = "{{service}}"
+
+    def __init__(self, settings: {{Service}}Settings | None = None) -> None:
+        self.settings = settings or {{Service}}Settings()
+        # DB spans come from the global SQLAlchemy instrumentation installed by platform_observability.setup(),
+        # which therefore must run BEFORE the module (and its engine) is constructed.
+        self.engine, self.sessions = build_engine(self.settings)
+        self._store = SqlOutboxStore(self.sessions, outbox_table)
+
+    def routers(self) -> Sequence[APIRouter]:
+        return [public_router, internal_router]
+
+    def provide(self, container: Container) -> None:
+        ping = Ping(uow_factory=lambda: SqlUnitOfWork(self.sessions), clock=SystemClock())
+        container.bind(Ping, ping)
+        container.bind({{Service}}Api, {{Service}}ApiImpl(ping))
+
+    def outbox_store(self) -> OutboxStore | None:
+        return self._store
+
+    async def on_shutdown(self) -> None:
+        await self.engine.dispose()
+
+    async def health(self) -> HealthReport:
+        try:
+            async with self.engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            check = CheckResult(name="database")
+        except Exception as exc:  # noqa: BLE001 - readiness must report, not raise
+            check = CheckResult(name="database", status=HealthStatus.DOWN, detail=type(exc).__name__)
+        return HealthReport.from_checks(self.name, [check])
+
+
+def build_module() -> {{Service}}Module:
+    """Entry point registered under `befastapi.services` (pyproject)."""
+    return {{Service}}Module()

@@ -1,0 +1,10 @@
+"""Business metrics declared once (rule O-5). Attributes are closed sets — never IDs or free text."""
+
+from platform_observability import Counter
+
+PINGS_RECEIVED = Counter(
+    "{{service}}.ping.received",
+    allowed={"outcome": frozenset({"ok"})},
+    description="SAMPLE business metric — replace with real ones",
+    scope="{{service}}_service",
+)

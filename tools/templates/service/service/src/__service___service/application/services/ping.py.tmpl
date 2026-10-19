@@ -1,0 +1,26 @@
+"""SAMPLE use case showing the pattern: unit of work + outbox event + span + business metric."""
+
+from collections.abc import Callable
+
+from platform_core.clock import Clock
+from platform_observability import get_logger, traced_use_case
+from {{service}}_contracts import PingReceived, PingResult
+from {{service}}_service.application.ports import UnitOfWork
+from {{service}}_service.application.telemetry import PINGS_RECEIVED
+
+
+class Ping:
+    def __init__(self, uow_factory: Callable[[], UnitOfWork], clock: Clock) -> None:
+        self._uow_factory = uow_factory
+        self._clock = clock
+        self._log = get_logger("{{service}}.ping")
+
+    @traced_use_case
+    async def __call__(self) -> PingResult:
+        message = "pong"
+        async with self._uow_factory() as uow:
+            await uow.outbox.add(PingReceived(message=message))  # same transaction as any data change (D-5)
+            await uow.commit()
+        PINGS_RECEIVED.add(outcome="ok")
+        self._log.info("ping_handled")
+        return PingResult(service="{{service}}", message=message, at=self._clock.now())

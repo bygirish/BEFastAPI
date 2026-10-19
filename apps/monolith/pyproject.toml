@@ -1,0 +1,35 @@
+[project]
+name = "monolith-app"
+version = "0.1.0"
+description = "Composition root: runs every enabled service in one process."
+requires-python = ">=3.12"
+dependencies = [
+    "platform-core",
+    "platform-events",
+    "platform-http",
+    "platform-observability",
+    "platform-security",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    # >>> generated:service-deps (tools/sync_workspace.py)
+    # <<< generated:service-deps
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/monolith_app"]
+
+[tool.uv.sources]
+platform-core = { workspace = true }
+platform-events = { workspace = true }
+platform-http = { workspace = true }
+platform-observability = { workspace = true }
+platform-security = { workspace = true }
+# >>> generated:service-sources (tools/sync_workspace.py)
+# <<< generated:service-sources
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "httpx>=0.27"]

@@ -16,12 +16,16 @@ from platform_core.health import CheckResult
 from platform_core.pagination import Page, PageRequest
 
 
-def test_uuid7_is_version7_and_time_ordered() -> None:
-    first, second = uuid7(), uuid7()
-    assert first.version == 7
-    assert first.variant == "specified in RFC 4122"
-    assert first != second
-    assert (first.int >> 80) <= (second.int >> 80)
+def test_uuid7_is_version7() -> None:
+    value = uuid7()
+    assert value.version == 7
+    assert value.variant == "specified in RFC 4122"
+
+
+def test_uuid7_is_strictly_increasing_even_within_one_millisecond() -> None:
+    ids = [uuid7() for _ in range(20_000)]  # far more than fit in one millisecond
+    assert ids == sorted(ids)
+    assert len(set(ids)) == len(ids)
 
 
 def test_fixed_clock_requires_tz_and_advances() -> None:

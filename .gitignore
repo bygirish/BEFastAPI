@@ -117,8 +117,12 @@ compose.override.yml
 compose.override.yaml
 /volumes/
 
-# Generated observability assets (assembled by tools/sync_observability.py)
-deploy/observability/generated/
+# Generated observability assets (assembled by tools/sync_observability.py). The two folders are KEPT (via
+# .gitkeep) because docker-compose bind-mounts them; a missing host folder would be created root-owned by Docker.
+deploy/observability/generated/rules/*
+!deploy/observability/generated/rules/.gitkeep
+deploy/observability/generated/dashboards/*
+!deploy/observability/generated/dashboards/.gitkeep
 deploy/observability/**/data/
 
 # ----------------------------------------------------------------------------- Logs & temp

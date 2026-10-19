@@ -6,3 +6,8 @@ One `##` section per alert. The section id is used as the alert's `runbook_url` 
 **Symptom:** error budget for availability is burning fast.
 **First checks:** Grafana → "Service" dashboard (`app_service={{service}}`) → error ratio panel → exemplar → trace → logs.
 **Mitigation:** _fill in_
+
+## {{service}}-latency-burn
+**Symptom:** too many slow requests on public routes (threshold in `slo.yaml`).
+**First checks:** Grafana → "RED overview" → latency p95 panel → click an exemplar dot → trace → find the slow span (database? another service?).
+**Mitigation:** _fill in_

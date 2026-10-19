@@ -1,0 +1,222 @@
+{
+  "uid": "red-overview",
+  "title": "RED overview (per logical service)",
+  "tags": [
+    "platform",
+    "red"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "description": "Rate, Errors, Duration for every logical service (app.service), plus recent logs. Filters survive extraction because they use app_service, not the process name.",
+  "templating": {
+    "list": [
+      {
+        "name": "app_service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count, app_service)",
+          "refId": "q"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (app_service) (rate(http_server_request_duration_seconds_count{app_service=~\"$app_service\"}[$__rate_interval]))",
+          "legendFormat": "{{app_service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "description": "Requests per second per service."
+    },
+    {
+      "id": 2,
+      "title": "Error ratio (5xx / all)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (app_service) (rate(http_server_request_duration_seconds_count{app_service=~\"$app_service\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum by (app_service) (rate(http_server_request_duration_seconds_count{app_service=~\"$app_service\"}[$__rate_interval]))) or (sum by (app_service) (rate(http_server_request_duration_seconds_count{app_service=~\"$app_service\"}[$__rate_interval])) * 0)",
+          "legendFormat": "{{app_service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "description": "Share of requests that failed server-side (5xx). 4xx are caller mistakes and are not counted. A flat zero line means no server errors."
+    },
+    {
+      "id": 3,
+      "title": "Latency p95 by route",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, app_service, http_route) (rate(http_server_request_duration_seconds_bucket{app_service=~\"$app_service\"}[$__rate_interval])))",
+          "legendFormat": "{{app_service}} {{http_route}}",
+          "exemplar": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "description": "Dots on the line are exemplars: click one to jump to the trace of a slow request."
+    },
+    {
+      "id": 4,
+      "title": "Requests by status code",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{app_service=~\"$app_service\"}[$__rate_interval]))",
+          "legendFormat": "{{http_response_status_code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Spans/s by logical service (from traces)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (app_service) (rate(traces_span_metrics_calls_total{app_service=~\"$app_service\"}[$__rate_interval]))",
+          "legendFormat": "{{app_service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "description": "Derived by the collector from spans (spanmetrics connector)."
+    },
+    {
+      "id": 6,
+      "title": "Recent logs",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\".+\"} |~ \"$app_service\"",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Structured JSON logs. Open a line and use the 'Open trace' link.",
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

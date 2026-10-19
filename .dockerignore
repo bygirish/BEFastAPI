@@ -1,0 +1,23 @@
+# Keep the build context small and free of secrets/state (rule E-3).
+.git
+.github
+.claude
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.import_linter_cache
+.coverage
+htmlcov
+.env
+.env.*
+!.env.example
+docs
+deploy
+**/*.log
+**/*.db
+**/*.sqlite*
+node_modules

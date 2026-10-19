@@ -1,0 +1,10 @@
+# Local default: group everything and send nowhere (alerts are visible in the Alertmanager UI and in Grafana).
+# To get notified, add a receiver (Slack/webhook/email) and route severity=page to it.
+route:
+  receiver: "null"
+  group_by: [alertname, app_service]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+receivers:
+  - name: "null"

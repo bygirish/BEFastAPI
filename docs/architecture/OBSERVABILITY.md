@@ -52,6 +52,7 @@ Related: [ARCHITECTURE §11](ARCHITECTURE.md) · [STANDARDS §5 (O-rules), AP-27
 - Apps never talk to a backend directly — only to the Collector (OTLP). Swapping a backend never touches application code.
 - Defaults (local): Tempo, Prometheus (OTLP/remote-write with exemplars), Loki (OTLP ingest), Grafana, Alertmanager.
 - Retention (local defaults): traces 3 d, logs 7 d, metrics 15 d. Production values come from infra policy, not code.
+- Verified facts (live run, Phase A2): the SDK exports metrics every 60 s by default (we set `OTEL_METRIC_EXPORT_INTERVAL=15000` locally); collector metrics are named `otelcol_*` **without** `_total` in contrib 0.111; the OTLP log handler renders each record once (our JSON line is the log body) and swallows its own errors.
 
 ---
 

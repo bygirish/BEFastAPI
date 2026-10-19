@@ -1,0 +1,71 @@
+# OpenTelemetry Collector — the ONLY thing applications talk to (OBSERVABILITY.md §2, rule O-1).
+# Apps send OTLP here; swapping a backend (Datadog, Honeycomb, ...) means editing THIS file, not application code.
+receivers:
+  otlp:
+    protocols:
+      grpc: {endpoint: 0.0.0.0:4317}
+      http: {endpoint: 0.0.0.0:4318}
+
+processors:
+  memory_limiter:            # protect the collector itself (rule O-11: telemetry must never take things down)
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 96
+  attributes/redact:         # safety net behind the in-app redaction (rule O-4)
+    actions:
+      - {key: http.request.header.authorization, action: delete}
+      - {key: http.request.header.cookie, action: delete}
+      - {key: http.response.header.set-cookie, action: delete}
+      - {key: password, action: delete}
+      - {key: otp, action: delete}
+      - {key: token, action: delete}
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+
+connectors:
+  # RED metrics derived from spans, per logical service. Useful even inside the monolith.
+  spanmetrics:
+    histogram:
+      explicit:
+        buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2500ms, 5s, 10s]
+    dimensions:
+      - {name: app.service}
+      - {name: http.route}
+      - {name: http.response.status_code}
+    exemplars: {enabled: true}
+    namespace: traces.span.metrics
+  # Service dependency graph (shows logical call edges; a depth > 1 would violate rule C-5).
+  servicegraph:
+    latency_histogram_buckets: [5ms, 25ms, 100ms, 500ms, 2500ms]
+    dimensions: [app.service]
+    store: {ttl: 5s, max_items: 1000}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls: {insecure: true}
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    resource_to_telemetry_conversion: {enabled: true}   # service.name etc. become labels
+    tls: {insecure: true}
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls: {insecure: true}
+
+service:
+  telemetry:
+    metrics: {address: 0.0.0.0:8888}   # the collector's own health (scraped by Prometheus)
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlp/tempo, spanmetrics, servicegraph]
+    metrics:
+      receivers: [otlp, spanmetrics, servicegraph]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlphttp/loki]

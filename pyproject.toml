@@ -30,6 +30,8 @@ dev = [
     "aiosqlite>=0.20",
     "alembic>=1.13",
     "redis>=5.0",  # import-linter needs every package named in .importlinter to be importable
+    "pyyaml>=6.0",  # tools/sync_observability.py (SLO rule generation)
+    "types-pyyaml>=6.0",
 ]
 
 # ---------------------------------------------------------------- pytest

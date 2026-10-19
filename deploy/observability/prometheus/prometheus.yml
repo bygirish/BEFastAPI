@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Application metrics do NOT appear here: they are pushed over OTLP to the collector, which remote-writes them.
+# This file only scrapes infrastructure (exporters, the collector itself, Prometheus).
+scrape_configs:
+  - job_name: prometheus
+    static_configs: [{targets: ["localhost:9090"]}]
+  - job_name: otel-collector
+    static_configs: [{targets: ["otel-collector:8888"]}]
+  - job_name: postgres
+    static_configs: [{targets: ["postgres-exporter:9187"]}]
+  - job_name: redis
+    static_configs: [{targets: ["redis-exporter:9121"]}]
+  # External view of availability: probe /readyz through the real network path.
+  - job_name: blackbox-readyz
+    metrics_path: /probe
+    params: {module: [http_2xx]}
+    static_configs: [{targets: ["http://app:8000/readyz"]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {source_labels: [__param_target], target_label: instance}
+      - {target_label: __address__, replacement: "blackbox-exporter:9115"}
+
+rule_files:
+  - /etc/prometheus/rules/*.yml                 # hand-written platform rules (committed)
+  - /etc/prometheus/generated-rules/*.yml       # SLO burn-rate rules generated from services/*/observability/slo.yaml
+
+alerting:
+  alertmanagers:
+    - static_configs: [{targets: ["alertmanager:9093"]}]

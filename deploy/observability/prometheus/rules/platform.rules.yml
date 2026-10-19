@@ -1,0 +1,26 @@
+# Cause-based alerts for the platform itself (symptom alerts come from per-service SLO rules). Rule O-9:
+# each one says WHY it exists in its description.
+groups:
+  - name: platform
+    rules:
+      - alert: ScrapeTargetDown
+        expr: up == 0
+        for: 2m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"
+          description: "Without this target some dashboards go blind. Check the container: docker compose ps / logs."
+      - alert: ReadyzProbeFailing
+        expr: probe_success{job="blackbox-readyz"} == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "The application's /readyz is failing from the outside"
+          description: "External view of availability. Open /readyz to see which module's check is DOWN."
+      - alert: CollectorDroppingTelemetry
+        expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) > 0 or sum(rate(otelcol_receiver_refused_spans[5m])) > 0
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "The OpenTelemetry collector is dropping spans"
+          description: "Traces are being lost (rule O-11: telemetry drops silently by design, so we alert on it)."

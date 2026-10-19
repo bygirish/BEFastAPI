@@ -1,0 +1,242 @@
+# =============================================================================
+# BEFastAPI local stack — `cp .env.example .env && docker compose up`
+#
+# Profiles (selected by COMPOSE_PROFILES in .env):
+#   (none)  core : postgres, redis, db-provision, migrate-<service>, app
+#   obs          : otel-collector, tempo, loki, prometheus, alertmanager, grafana, exporters
+#   tools        : mailpit, adminer
+#
+# Blocks between `>>> generated:*` markers are written by tools/sync_workspace.py
+# from the services on disk (rule E-1). Do not edit them by hand.
+# =============================================================================
+name: befastapi
+
+x-app-build: &app-build
+  context: .
+  dockerfile: docker/Dockerfile
+  args:
+    APP_VERSION: ${APP_VERSION:-dev}
+
+x-app-image: &app-image befastapi/app:${APP_VERSION:-dev}
+
+# A one-shot job running one service's own Alembic migrations (rule D-3, E-4).
+x-migrate: &migrate
+  build: *app-build
+  image: *app-image
+  restart: "no"
+  networks: [backend]
+  depends_on:
+    db-provision:
+      condition: service_completed_successfully
+
+x-obs-logging: &obs-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+services:
+  # ------------------------------------------------------------------------- core
+  postgres:
+    image: postgres:16.4
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-befastapi}
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-befastapi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["${REDIS_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  # Creates one role + one schema per service (rule D-4). Idempotent: runs on every `up`.
+  db-provision:
+    image: postgres:16.4
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-h", "postgres", "-U", "postgres", "-d", "${POSTGRES_DB:-befastapi}", "-f", "/provision.sql"]
+    volumes: ["./deploy/postgres/provision.sql:/provision.sql:ro"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+  # >>> generated:migrate-jobs (tools/sync_workspace.py)
+  # <<< generated:migrate-jobs
+
+  app:
+    build: *app-build
+    image: *app-image
+    ports: ["${APP_PORT:-8000}:8000"]
+    environment:
+      ENV: ${ENV:-local}
+      APP_VERSION: ${APP_VERSION:-dev}
+      ENABLED_SERVICES: ${ENABLED_SERVICES:-}
+      PLATFORM_REDIS_URL: redis://redis:6379/0
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-false}
+      OTEL_SERVICE_NAME: befastapi-monolith
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15000}   # ms; the SDK default (60 s) feels slow locally
+      # >>> generated:app-env (tools/sync_workspace.py)
+      # <<< generated:app-env
+    depends_on:
+      redis:
+        condition: service_healthy
+      db-provision:
+        condition: service_completed_successfully
+      # >>> generated:app-depends (tools/sync_workspace.py)
+      # <<< generated:app-depends
+    networks: [backend, obs, edge]
+
+  # ------------------------------------------------------------------------- obs profile
+  otel-collector:
+    profiles: [obs]
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./deploy/observability/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["${OTLP_GRPC_PORT:-4317}:4317", "${OTLP_HTTP_PORT:-4318}:4318"]
+    depends_on: [tempo, loki, prometheus]
+    logging: *obs-logging
+    networks: [obs]
+
+  tempo:
+    profiles: [obs]
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./deploy/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports: ["${TEMPO_PORT:-3200}:3200"]
+    logging: *obs-logging
+    networks: [obs]
+
+  loki:
+    profiles: [obs]
+    image: grafana/loki:3.2.1
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./deploy/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports: ["${LOKI_PORT:-3100}:3100"]
+    logging: *obs-logging
+    networks: [obs]
+
+  prometheus:
+    profiles: [obs]
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/prometheus/rules:/etc/prometheus/rules:ro
+      - ./deploy/observability/generated/rules:/etc/prometheus/generated-rules:ro
+      - prometheus-data:/prometheus
+    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [alertmanager]
+    logging: *obs-logging
+    networks: [obs, backend]
+
+  alertmanager:
+    profiles: [obs]
+    image: prom/alertmanager:v0.27.0
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes: ["./deploy/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    ports: ["${ALERTMANAGER_PORT:-9093}:9093"]
+    logging: *obs-logging
+    networks: [obs]
+
+  grafana:
+    profiles: [obs]
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/platform/red-overview.json
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards/platform:ro
+      - ./deploy/observability/generated/dashboards:/var/lib/grafana/dashboards/services:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["${GRAFANA_PORT:-3000}:3000"]
+    depends_on: [prometheus, tempo, loki]
+    logging: *obs-logging
+    networks: [obs, edge]
+
+  postgres-exporter:
+    profiles: [obs]
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-befastapi}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [obs, backend]
+
+  redis-exporter:
+    profiles: [obs]
+    image: oliver006/redis_exporter:v1.62.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [obs, backend]
+
+  blackbox-exporter:
+    profiles: [obs]
+    image: prom/blackbox-exporter:v0.25.0
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes: ["./deploy/observability/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro"]
+    networks: [obs]
+
+  # ------------------------------------------------------------------------- tools profile
+  mailpit:
+    profiles: [tools]
+    image: axllent/mailpit:v1.20
+    ports: ["${MAILPIT_UI_PORT:-8025}:8025", "1025:1025"]
+    networks: [backend]
+
+  adminer:
+    profiles: [tools]
+    image: adminer:4.8.1
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports: ["${ADMINER_PORT:-8080}:8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+networks:
+  edge: {}      # reachable from the host (app, grafana)
+  backend: {}   # app <-> postgres/redis
+  obs: {}       # telemetry traffic
+
+volumes:
+  pg-data: {}
+  tempo-data: {}
+  loki-data: {}
+  prometheus-data: {}
+  grafana-data: {}

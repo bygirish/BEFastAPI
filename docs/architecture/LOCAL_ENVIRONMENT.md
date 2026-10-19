@@ -1,6 +1,6 @@
 # Local Environment — Docker Compose
 
-Status: **DRAFT for review** · Last updated: 2026-10-19
+Status: **Phase A2 implemented and verified live** (`make stack-check`: log → trace → metric correlation, Grafana provisioning, SLO rules loaded) · Last updated: 2026-10-19
 
 > **Goal:** `cp .env.example .env && docker compose up` brings up **every service, its database and migrations, Redis, the
 > observability stack and dev tooling** — healthy, correlated and ready to use in a couple of minutes. A second command
@@ -10,31 +10,35 @@ Related: [ARCHITECTURE §9](ARCHITECTURE.md) · [OBSERVABILITY](OBSERVABILITY.md
 
 ---
 
-## 1. Repository additions
+## 1. Repository additions (as built in Phase A2)
 
 ```
 BEFastAPI/
-├── docker-compose.yml              # all services, with profiles (single source of truth)
-├── compose.dev.yaml                # dev override: bind-mounts + uvicorn --reload (opt-in via `make dev`)
-├── .env.example                    # every variable documented; COMPOSE_PROFILES defaults to "obs,tools"
-├── Makefile                        # up / down / logs / migrate / test / lint / obs-smoke / reset
-├── docker/
-│   ├── Dockerfile                  # ONE multi-stage image for all apps (ARG APP=monolith|auth_api|…)
-│   └── .dockerignore
+├── docker-compose.yml              # core + obs + tools profiles; migrate jobs / app env / depends_on are GENERATED blocks
+├── .env.example                    # every variable documented; COMPOSE_PROFILES=obs,tools
+├── .dockerignore
+├── Makefile                        # up / down / reset / logs / ps / obs-smoke / stack-check / compose-config …
+├── docker/Dockerfile               # ONE multi-stage image for every app (ARG APP_PACKAGE, non-root, HEALTHCHECK /readyz)
 ├── deploy/
-│   ├── postgres/init/              # 01-roles-schemas.sh: per-service schema + role (rule D-4), pg_stat_statements
+│   ├── postgres/provision.sql      # GENERATED: one role + schema per service (idempotent, run by the db-provision job)
 │   ├── observability/
 │   │   ├── otel-collector/config.yaml
-│   │   ├── prometheus/prometheus.yml
-│   │   ├── alertmanager/alertmanager.yml
-│   │   ├── loki/loki.yaml
-│   │   ├── tempo/tempo.yaml
-│   │   ├── pyroscope/pyroscope.yaml          # optional profile
-│   │   ├── grafana/provisioning/{datasources,dashboards,alerting}/
-│   │   └── generated/              # assembled from services/*/observability by tools/sync_observability.py (gitignored)
-│   └── keys/                       # dev-only key generation script (never committed keys)
-└── services/<name>/observability/  # per-service dashboards, alert rules, SLOs, runbook (travel with the service)
+│   │   ├── prometheus/{prometheus.yml, rules/platform.rules.yml}
+│   │   ├── alertmanager/alertmanager.yml · blackbox/blackbox.yml
+│   │   ├── loki/loki.yaml · tempo/tempo.yaml
+│   │   ├── grafana/{provisioning/{datasources,dashboards}, dashboards/{red-overview,platform-health}.json}
+│   │   └── generated/{rules,dashboards}/   # assembled from services/*/observability by tools/sync_observability.py
+│   └── keys/.gitkeep               # dev signing keys arrive with Auth (Phase C)
+├── tools/{sync_observability.py, obs_smoke.py, stack_check.sh}
+└── services/<name>/observability/  # slo.yaml, alerts.rules.yaml, dashboards/, runbook.md (travel with the service)
 ```
+
+Deviations from the first draft of this design (decided while building):
+- **`db-provision` job instead of Postgres init scripts.** Files in `/docker-entrypoint-initdb.d` only run when the data volume is first created, so a service added later would
+  never get its schema. A one-shot job that runs idempotent SQL on *every* `up` fixes that.
+- **No `keygen` job yet** — nothing consumes signing keys until Auth (Phase C).
+- **No `compose.dev.yaml` hot-reload override yet** — added when the first real service needs it.
+- **Generated folders are committed as empty placeholders** (`.gitkeep`) because Docker would otherwise create missing bind-mount sources as root-owned directories.
 
 ---
 
@@ -45,7 +49,7 @@ BEFastAPI/
 |---|---|---|---|
 | `postgres` | `postgres:16` (+ `pg_stat_statements`) | single cluster, **schema + role per service** | init script creates `auth`, `users`, `files`, `notifications` schemas and roles; healthcheck `pg_isready` |
 | `redis` | `redis:7` | OTP challenges, rate limits, caches, (later) streams | AOF off in dev; healthcheck `redis-cli ping` |
-| `keygen` | app image (one-shot) | generates dev RS256 key pair into volume `dev-secrets` | prod uses a secret manager |
+| `db-provision` | `postgres` image (one-shot) | runs `deploy/postgres/provision.sql`: role + schema per service, `pg_stat_statements` | idempotent; every `migrate-*` job waits for it |
 | `migrate-<svc>` | app image (one-shot, one per service) | runs **that service's own Alembic** to head | `depends_on: postgres healthy`; app containers wait for `service_completed_successfully` (rule D-3) |
 | `app` (monolith) | app image, `APP=monolith` | all enabled services in one process (`ENABLED_SERVICES=auth,users,files,notifications`) | `:8000`; `/livez` `/readyz` healthchecks; non-root user; graceful SIGTERM |
 
@@ -113,7 +117,7 @@ OTEL_TRACES_SAMPLER=parentbased_always_on
 - `HEALTHCHECK` → `/readyz`; `STOPSIGNAL SIGTERM`; Uvicorn/Gunicorn with graceful shutdown (drain, flush OTel exporters, close pools).
 - Container labels: `org.opencontainers.image.version/revision`, `app.service`.
 - Logs go to stdout as JSON (Docker `json-file` with rotation); OTLP logs also go to Loki.
-- Startup ordering uses health conditions, never `sleep`: `postgres(healthy) → keygen/migrate-*(completed) → app(healthy) → ready`.
+- Startup ordering uses health conditions, never `sleep`: `postgres(healthy) → db-provision(completed) → migrate-*(completed) → app(healthy) → ready`.
 
 ---
 
@@ -142,6 +146,6 @@ URLs after `make up`: API `http://localhost:8000/docs` · Grafana `http://localh
 2. `GET /readyz` lists every enabled module as `ok`; adding a service via `tools/new_service.py` makes it appear without editing compose (generator updates `ENABLED_SERVICES`, `postgres/init`, `migrate-<svc>` entry).
 3. A request to any endpoint yields, in Grafana within seconds: a trace (with `app.service` + use-case spans), correlated logs (same `trace_id`), RED metrics with exemplars.
 4. Killing Postgres, Redis, or the Collector degrades gracefully: readiness fails/recovers as expected; the app keeps serving what it can and drops telemetry without errors.
-5. `make reset && make up` is reproducible (idempotent init scripts, migrations from empty).
+5. `make reset && make up` is reproducible (idempotent `db-provision` SQL, migrations from empty).
 6. `make test s=<svc>` passes with **only that service** installed — compose is not required for unit tests; integration tests use testcontainers (or the compose Postgres via `TEST_DATABASE_URL`).
 7. No secrets or real credentials are committed; dev keys are generated at first start.

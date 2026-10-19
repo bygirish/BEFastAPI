@@ -53,6 +53,7 @@ compose-config: ## Validate docker-compose.yml (no daemon needed)
 
 up: obs-sync ## Build and start everything (profiles come from .env: cp .env.example .env)
 	docker compose up -d --build --wait
+	@docker compose kill -s HUP prometheus >/dev/null 2>&1 || true   # re-read generated SLO rules if Prometheus was already running
 	@echo "App:     http://localhost:$${APP_PORT:-8000}/docs"
 	@echo "Grafana: http://localhost:$${GRAFANA_PORT:-3000}  (admin / admin)"
 

@@ -74,6 +74,7 @@ case "$ACTION" in
     uv sync --all-packages --quiet
     uv run python tools/sync_observability.py >/dev/null
     docker compose up -d --build --wait
+    docker compose kill -s HUP prometheus >/dev/null 2>&1 || true   # pick up the demo service's generated SLO rules on an already-running stack
     stop_traffic
     nohup uv run python tools/demo_traffic.py --base "http://localhost:$APP_PORT" --service "$NAME" > "$STATE/traffic.log" 2>&1 &
     echo $! > "$STATE/traffic.pid"

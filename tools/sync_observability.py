@@ -15,6 +15,7 @@ Metric names below assume OTLP -> Prometheus conversion: `http.server.request.du
 """
 
 import argparse
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -64,8 +65,45 @@ def _selector(service: str, extra: str = "") -> str:
     return base + (f",{extra}" if extra else "")
 
 
+_METRIC_RE = re.compile(r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
+_LABEL_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_VALUE_RE = re.compile(r"^[\w.|*+\-]+$")
+
+
+def _counter_ratio(service: str, slo: dict[str, Any], window: str) -> str:
+    """Bad/total ratio of any counter, e.g. notifications_delivery_total{outcome="failed"} / all of it."""
+    metric = str(slo.get("metric", ""))
+    if not _METRIC_RE.match(metric):
+        raise ObservabilityError(
+            f"{service}: counter_ratio SLO needs a valid 'metric' name, got {metric!r}"
+        )
+    if not metric.endswith("_total"):
+        # The OTel -> Prometheus exporter appends _total to counters; without it the query silently matches nothing.
+        raise ObservabilityError(
+            f"{service}: counter_ratio metric must be the Prometheus counter name ending in _total, got {metric!r}"
+        )
+    bad = slo.get("bad", {})
+    if not bad:
+        raise ObservabilityError(
+            f"{service}: counter_ratio SLO needs a non-empty 'bad' label filter"
+        )
+    base = f'app_service="{service}"'
+    selectors = [base]
+    for label, value in bad.items():
+        if not _LABEL_RE.match(str(label)) or not _VALUE_RE.match(str(value)):
+            raise ObservabilityError(
+                f"{service}: unsafe label filter {label}={value!r} in counter_ratio SLO"
+            )
+        selectors.append(f'{label}=~"{value}"')
+    total = f"sum(rate({metric}{{{base}}}[{window}]))"
+    errors = f"sum(rate({metric}{{{','.join(selectors)}}}[{window}]))"
+    return f"({errors} / {total})"
+
+
 def bad_ratio(service: str, slo: dict[str, Any], window: str) -> str:
-    kind = slo["name"]
+    kind = slo.get("kind", slo["name"])  # `kind` defaults to the SLO name (availability | latency)
+    if kind == "counter_ratio":
+        return _counter_ratio(service, slo, window)
     total = f"sum(rate({METRIC}_count{{{_selector(service)}}}[{window}]))"
     if kind == "availability":
         five_xx = 'http_response_status_code=~"5.."'
@@ -81,7 +119,7 @@ def bad_ratio(service: str, slo: dict[str, Any], window: str) -> str:
         fast = f"sum(rate({METRIC}_bucket{{{_selector(service, le_filter)}}}[{window}]))"
         return f"(1 - {fast} / {total})"
     raise ObservabilityError(
-        f"{service}: unknown SLO kind {kind!r} (expected availability | latency)"
+        f"{service}: unknown SLO kind {kind!r} (expected availability | latency | counter_ratio)"
     )
 
 

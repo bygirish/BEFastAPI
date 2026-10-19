@@ -21,6 +21,14 @@ _RETRYABLE_STATUS = frozenset({502, 503, 504})
 TokenProvider = Callable[[], Awaitable[str]]
 
 
+def _remote_error(response: httpx.Response) -> dict[str, Any] | None:
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return None
+    return error if isinstance(error, dict) else None
+
+
 class ServiceHttpClient:
     def __init__(
         self,
@@ -87,7 +95,13 @@ class ServiceHttpClient:
                     return response
                 last_error = UnavailableError(
                     f"{self._target} returned {response.status_code}",
-                    details={"target": self._target},
+                    details={
+                        "target": self._target,
+                        "status": response.status_code,
+                        # the remote service's own {"error": {...}} body, so a contract client can
+                        # re-raise its specific error (code + details) instead of a generic one
+                        "remote_error": _remote_error(response),
+                    },
                 )
             if attempt < attempts:
                 self._log.warning(

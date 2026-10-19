@@ -104,3 +104,25 @@ def test_router_prefix_validation() -> None:
         validate_router_prefix("auth", APIRouter(prefix="/api/v1/users"))
     with pytest.raises(ValueError):
         validate_router_prefix("auth", APIRouter(prefix="/auth"))
+
+
+async def test_exhausted_retryable_status_keeps_the_remote_error_body() -> None:
+    body = {
+        "error": {
+            "code": "THING_DOWN",
+            "message": "nope",
+            "details": {"id": "7"},
+            "request_id": "r",
+        }
+    }
+    client = ServiceHttpClient(
+        "http://svc",
+        target="svc",
+        transport=httpx.MockTransport(lambda r: httpx.Response(503, json=body)),
+    )
+    with pytest.raises(UnavailableError) as info:
+        await client.request("POST", "/x")
+    assert info.value.details["status"] == 503
+    assert info.value.details["remote_error"]["code"] == "THING_DOWN"
+    assert info.value.details["remote_error"]["details"] == {"id": "7"}
+    await client.aclose()

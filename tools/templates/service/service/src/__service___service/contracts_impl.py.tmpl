@@ -1,6 +1,6 @@
 """In-process implementation of {{service}}_contracts.api (used while the service lives in the monolith)."""
 
-from platform_observability import traced_contract_call
+from platform_observability import app_service_scope, traced_contract_call
 from {{service}}_contracts import PingResult
 from {{service}}_service.application.services.ping import Ping
 
@@ -13,4 +13,7 @@ class {{Service}}ApiImpl:
 
     @traced_contract_call(_CONTRACT)
     async def ping(self) -> PingResult:
-        return await self._ping()
+        # In-process calls run inside the CALLER's request, so the context says app.service=<caller>.
+        # Re-scope to this service so its spans, metrics and logs are attributed to it (and dashboards stay right).
+        with app_service_scope("{{service}}"):
+            return await self._ping()

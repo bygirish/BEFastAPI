@@ -30,6 +30,9 @@ uv sync --all-packages --quiet        # refreshes uv.lock so the image build (--
 uv run python tools/sync_observability.py
 docker compose config --quiet
 docker compose up -d --build --wait
+# A stack that was already running keeps its OLD rule files (Prometheus doesn't watch them): SIGHUP makes it re-read them.
+docker compose kill -s HUP prometheus >/dev/null 2>&1 || true
+sleep 3
 docker compose ps
 uv run python tools/obs_smoke.py --service "${NAME}" --app "http://localhost:${APP_PORT}"
 echo "stack-check OK"

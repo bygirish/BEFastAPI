@@ -4,7 +4,8 @@
 * root pyproject.toml     -> workspace members block
 * apps/monolith/pyproject -> service dependency + source blocks
 * .importlinter           -> fully generated architecture contracts (docs/architecture/STANDARDS.md §8)
-* docker-compose.yml      -> migrate-<service> jobs + the app's env / depends_on entries (rule E-1)
+* docker-compose.yml      -> migrate-<service> jobs + the app's env / depends_on entries (rule E-1);
+                             a service adds container env in services/<name>/service/compose.env
 * deploy/postgres/provision.sql -> one role + one schema per service (rule D-4)
 
   uv run python tools/sync_workspace.py           # rewrite
@@ -12,6 +13,7 @@
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -169,7 +171,26 @@ def render_provision_sql(services: list[str]) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
-def compose_blocks(services: list[str]) -> dict[str, list[str]]:
+def read_compose_env(root: Path, service: str) -> list[tuple[str, str]]:
+    """KEY=VALUE lines from services/<name>/service/compose.env (a service declares its own container env)."""
+    path = root / "services" / service / "service" / "compose.env"
+    if not path.exists():
+        return []
+    pairs: list[tuple[str, str]] = []
+    for number, raw in enumerate(path.read_text().splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        if not sep or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key.strip()):
+            raise SystemExit(
+                f"{path}:{number}: expected KEY=VALUE with an UPPER_CASE key, got {raw!r}"
+            )
+        pairs.append((key.strip(), value.strip()))
+    return pairs
+
+
+def compose_blocks(services: list[str], root: Path | None = None) -> dict[str, list[str]]:
     migrate: list[str] = []
     env: list[str] = []
     depends: list[str] = []
@@ -183,6 +204,10 @@ def compose_blocks(services: list[str]) -> dict[str, list[str]]:
             "",
         ]
         env.append(f"{s.upper()}_DATABASE_URL: {db_url(s)}")
+        for key, value in read_compose_env(root, s) if root else []:
+            env.append(
+                f"{key}: {json.dumps(value)}"
+            )  # JSON strings are valid YAML double-quoted scalars
         depends += [f"migrate-{s}:", "  condition: service_completed_successfully"]
     return {"migrate-jobs": migrate[:-1] if migrate else [], "app-env": env, "app-depends": depends}
 
@@ -217,7 +242,7 @@ def sync(root: Path, *, check: bool) -> bool:
 
     compose = root / "docker-compose.yml"
     text = compose.read_text()
-    for marker, lines in compose_blocks(services).items():
+    for marker, lines in compose_blocks(services, root).items():
         text = replace_block(text, marker, lines)
     write(compose, text)
     write(root / "deploy" / "postgres" / "provision.sql", render_provision_sql(services))

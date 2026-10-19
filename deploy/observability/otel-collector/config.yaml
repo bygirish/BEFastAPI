@@ -35,11 +35,14 @@ connectors:
       - {name: http.response.status_code}
     exemplars: {enabled: true}
     namespace: traces.span.metrics
+    # Default is 60 s: a 1-minute rate() window then holds ONE sample and returns "No data" (found during the demo).
+    metrics_flush_interval: 15s
   # Service dependency graph (shows logical call edges; a depth > 1 would violate rule C-5).
   servicegraph:
     latency_histogram_buckets: [5ms, 25ms, 100ms, 500ms, 2500ms]
     dimensions: [app.service]
     store: {ttl: 5s, max_items: 1000}
+    metrics_flush_interval: 15s
 
 exporters:
   otlp/tempo:

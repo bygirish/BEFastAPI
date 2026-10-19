@@ -110,7 +110,7 @@ def main() -> int:
         f"""
 Next steps
   1. uv sync --all-packages
-  2. uv run pytest services/{name} -q
+  2. uv run pytest services/{name}/service -q
   3. Add it to docs/architecture/ARCHITECTURE.md §5 (owner, owns, exposes, depends on)
   4. Replace the SAMPLE ping flow with real use cases (contracts first)
 """

@@ -43,7 +43,8 @@ filterwarnings = ["error::DeprecationWarning:platform_.*", "error::DeprecationWa
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["tools/templates"]
+# docs/ contains illustrative Python snippets in Markdown; ruff would otherwise reformat/lint them.
+extend-exclude = ["tools/templates", "docs"]
 
 [tool.ruff.lint]
 select = [

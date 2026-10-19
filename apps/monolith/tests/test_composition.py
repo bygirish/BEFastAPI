@@ -106,7 +106,12 @@ async def test_one_server_span_and_no_duplicate_request_metric() -> None:
 
     servers = [s for s in telemetry.spans() if s.kind.name == "SERVER"]
     assert len(servers) == 1
-    points = telemetry.data_points("http.server.request.duration")
+    # The in-memory metric reader is shared by the whole test process: look only at THIS test's route.
+    points = [
+        p
+        for p in telemetry.data_points("http.server.request.duration")
+        if p.get("http.route") == "/api/v1/fake/hello"
+    ]
     assert points
     assert all(p.get("app.service") == "fake" for p in points)
 

@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.146",
     "uvicorn[standard]>=0.30",
     # >>> generated:service-deps (tools/sync_workspace.py)
+    "notifications-service",
     # <<< generated:service-deps
 ]
 
@@ -29,6 +30,7 @@ platform-http = { workspace = true }
 platform-observability = { workspace = true }
 platform-security = { workspace = true }
 # >>> generated:service-sources (tools/sync_workspace.py)
+notifications-service = { workspace = true }
 # <<< generated:service-sources
 
 [dependency-groups]

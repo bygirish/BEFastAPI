@@ -1,0 +1,51 @@
+from types import TracebackType
+from typing import Self
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from notifications_service.infrastructure.db.models import outbox_table
+from notifications_service.infrastructure.db.repository import SqlDeliveryRepository
+from platform_events import SqlOutboxWriter
+
+
+class SqlUnitOfWork:
+    """One transaction per use case; commits data and outbox rows atomically (rule D-5)."""
+
+    def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
+        self._sessions = sessions
+        self._session: AsyncSession | None = None
+        self._outbox: SqlOutboxWriter | None = None
+        self._deliveries: SqlDeliveryRepository | None = None
+
+    @property
+    def outbox(self) -> SqlOutboxWriter:
+        assert self._outbox is not None, "use the unit of work inside 'async with'"
+        return self._outbox
+
+    @property
+    def deliveries(self) -> SqlDeliveryRepository:
+        assert self._deliveries is not None, "use the unit of work inside 'async with'"
+        return self._deliveries
+
+    async def __aenter__(self) -> Self:
+        self._session = self._sessions()
+        self._outbox = SqlOutboxWriter(self._session, outbox_table)
+        self._deliveries = SqlDeliveryRepository(self._session)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        assert self._session is not None
+        try:
+            if exc_type is not None:
+                await self._session.rollback()
+        finally:
+            await self._session.close()
+
+    async def commit(self) -> None:
+        assert self._session is not None
+        await self._session.commit()

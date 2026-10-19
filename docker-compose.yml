@@ -76,6 +76,11 @@ services:
     networks: [backend]
 
   # >>> generated:migrate-jobs (tools/sync_workspace.py)
+  migrate-notifications:
+    <<: *migrate
+    command: ["alembic", "-c", "services/notifications/service/migrations/alembic.ini", "upgrade", "head"]
+    environment:
+      NOTIFICATIONS_DATABASE_URL: postgresql+asyncpg://notifications:notifications@postgres:5432/${POSTGRES_DB:-befastapi}
   # <<< generated:migrate-jobs
 
   app:
@@ -92,6 +97,15 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15000}   # ms; the SDK default (60 s) feels slow locally
       # >>> generated:app-env (tools/sync_workspace.py)
+      NOTIFICATIONS_DATABASE_URL: postgresql+asyncpg://notifications:notifications@postgres:5432/${POSTGRES_DB:-befastapi}
+      NOTIFICATIONS_EMAIL_PROVIDERS: "${NOTIFICATIONS_EMAIL_PROVIDERS:-smtp,console}"
+      NOTIFICATIONS_SMS_PROVIDERS: "${NOTIFICATIONS_SMS_PROVIDERS:-console}"
+      NOTIFICATIONS_SMTP_HOST: "mailpit"
+      NOTIFICATIONS_SMTP_PORT: "1025"
+      NOTIFICATIONS_STATIC_OUTCOME: "${NOTIFICATIONS_STATIC_OUTCOME:-accept}"
+      NOTIFICATIONS_DEV_ENDPOINTS: "true"
+      NOTIFICATIONS_RATE_LIMIT_PER_HOUR: "${NOTIFICATIONS_RATE_LIMIT_PER_HOUR:-50}"
+      NOTIFICATIONS_ATTEMPT_TIMEOUT_SECONDS: "3"
       # <<< generated:app-env
     depends_on:
       redis:
@@ -99,6 +113,8 @@ services:
       db-provision:
         condition: service_completed_successfully
       # >>> generated:app-depends (tools/sync_workspace.py)
+      migrate-notifications:
+        condition: service_completed_successfully
       # <<< generated:app-depends
     networks: [backend, obs, edge]
 

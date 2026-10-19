@@ -7,11 +7,35 @@ root_packages =
     platform_observability
     platform_security
     monolith_app
+    notifications_service
+    notifications_contracts
+    notifications_api
     fastapi
     sqlalchemy
     httpx
     redis
 include_external_packages = True
+
+[importlinter:contract:services-not-apps]
+name = B-3/B-4: services never import composition roots
+type = forbidden
+source_modules =
+    notifications_service
+    notifications_contracts
+forbidden_modules =
+    monolith_app
+    notifications_api
+
+[importlinter:contract:contracts-pure]
+name = B-2: contracts never directly import frameworks or implementations
+type = forbidden
+source_modules =
+    notifications_contracts
+forbidden_modules =
+    fastapi
+    sqlalchemy
+    notifications_service
+allow_indirect_imports = True
 
 [importlinter:contract:libs-independent]
 name = B-3: libs never import services, contracts or apps
@@ -23,4 +47,30 @@ source_modules =
     platform_observability
     platform_security
 forbidden_modules =
+    notifications_service
+    notifications_contracts
+    notifications_api
     monolith_app
+
+[importlinter:contract:notifications-layers]
+name = L-1: notifications_service layering (api|infrastructure > application > domain)
+type = layers
+layers =
+    api | infrastructure
+    application
+    domain
+containers = notifications_service
+exhaustive = False
+
+[importlinter:contract:notifications-pure-core]
+name = L-2/L-3: notifications_service domain and application never directly import frameworks or vendors
+type = forbidden
+source_modules =
+    notifications_service.domain
+    notifications_service.application
+forbidden_modules =
+    fastapi
+    sqlalchemy
+    httpx
+    redis
+allow_indirect_imports = True

@@ -92,14 +92,26 @@ def configure_logging(
     )
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
-    handler.set_name("platform-stdout-json")
+    handler.set_name(STDOUT_HANDLER_NAME)
 
     root = logging.getLogger()
-    root.handlers = [h for h in root.handlers if h.get_name() != "platform-stdout-json"]
+    root.handlers = [h for h in root.handlers if h.get_name() != STDOUT_HANDLER_NAME]
     root.addHandler(handler)
     root.setLevel(level.upper())
     for name in _NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
+
+
+STDOUT_HANDLER_NAME = "platform-stdout-json"
+
+
+def json_formatter() -> logging.Formatter | None:
+    """The formatter that renders our JSON lines (looked up by handler NAME, never by position: other tools such as
+    pytest add their own root handlers first)."""
+    for handler in logging.getLogger().handlers:
+        if handler.get_name() == STDOUT_HANDLER_NAME:
+            return handler.formatter
+    return None
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:

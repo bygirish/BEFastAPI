@@ -5,6 +5,8 @@ without code changes. ``OTEL_SDK_DISABLED=true`` turns every signal into a no-op
 stdout JSON logging keeps working.
 """
 
+import importlib
+import importlib.util
 import logging
 import os
 from dataclasses import dataclass, field
@@ -28,7 +30,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from platform_core.settings import PlatformSettings
 from platform_observability import context
-from platform_observability.logging import configure_logging
+from platform_observability.logging import configure_logging, json_formatter
 from platform_observability.metrics import LATENCY_BUCKETS_S, set_strict
 
 
@@ -68,14 +70,46 @@ class ObservabilityHandle:
                 logging.getLogger(__name__).warning("telemetry_shutdown_failed", exc_info=True)
 
 
-class _JsonBodyLoggingHandler(LoggingHandler):
-    """Forward the rendered JSON line as the OTLP log body."""
+# Attributes structlog's ProcessorFormatter puts on the LogRecord; OpenTelemetry would try to export them as
+# attributes and log a warning ("Invalid type ... for attribute value") for every single line.
+_STRUCTLOG_RECORD_ATTRS = frozenset(
+    {"_logger", "_name", "msg", "args", "exc_info", "exc_text", "stack_info"}
+)
+
+
+class _SafeLoggingHandler(LoggingHandler):
+    """OTLP log handler: ships our one-line JSON as the log body and can never take the app down (rule O-11).
+
+    Two things the live docker-compose run taught us:
+      * the record's `msg` is a structlog event dict. We render it ONCE with our JSON formatter and hand OpenTelemetry a
+        clean record whose message is that string (formatting twice crashed start-up with AttributeError);
+      * `emit` runs inline in business code, so any exporter error is swallowed via `handleError`.
+    """
+
+    def __init__(
+        self, logger_provider: LoggerProvider, json_formatter: logging.Formatter | None
+    ) -> None:
+        super().__init__(level=logging.NOTSET, logger_provider=logger_provider)
+        self._json_formatter = json_formatter
 
     def emit(self, record: logging.LogRecord) -> None:
-        forwarded = logging.makeLogRecord(record.__dict__)
-        forwarded.msg = self.format(record)
-        forwarded.args = ()
-        super().emit(forwarded)
+        try:
+            rendered = (
+                self._json_formatter.format(record) if self._json_formatter else record.getMessage()
+            )
+            clean = logging.makeLogRecord(
+                {k: v for k, v in record.__dict__.items() if k not in _STRUCTLOG_RECORD_ATTRS}
+            )
+            clean.msg, clean.args = rendered, ()
+            super().emit(clean)
+        except Exception:  # noqa: BLE001 - telemetry must never raise into the caller
+            self.handleError(record)
+
+
+def build_log_handler(
+    logger_provider: LoggerProvider, formatter: logging.Formatter | None
+) -> logging.Handler:
+    return _SafeLoggingHandler(logger_provider, formatter)
 
 
 def setup(
@@ -135,9 +169,8 @@ def setup(
         BatchLogRecordProcessor(OTLPLogExporter(endpoint=endpoint, insecure=True))
     )
     set_logger_provider(logger_provider)
-    handler = _JsonBodyLoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
     root = logging.getLogger()
-    handler.setFormatter(root.handlers[0].formatter if root.handlers else None)
+    handler = build_log_handler(logger_provider, json_formatter())
     root.addHandler(handler)
 
     HTTPXClientInstrumentor().instrument()
@@ -149,11 +182,22 @@ def setup(
     )
 
 
-def _instrument_optional() -> None:
-    """SQLAlchemy/Redis are instrumented globally; engines/clients created afterwards are traced.
-    Hence setup() must be called before service modules build their engines."""
-    from opentelemetry.instrumentation.redis import RedisInstrumentor
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+# (library to look for, instrumentor module, instrumentor class)
+_OPTIONAL_INSTRUMENTORS: tuple[tuple[str, str, str], ...] = (
+    ("sqlalchemy", "opentelemetry.instrumentation.sqlalchemy", "SQLAlchemyInstrumentor"),
+    ("redis", "opentelemetry.instrumentation.redis", "RedisInstrumentor"),
+)
 
-    SQLAlchemyInstrumentor().instrument()
-    RedisInstrumentor().instrument()
+
+def _instrument_optional() -> None:
+    """Instrument SQLAlchemy/Redis globally, but ONLY if the library is installed in this environment.
+
+    The production image installs just what the services declare (no dev group), so e.g. `redis` may be absent
+    until a service needs it; importing its instrumentor unconditionally would crash start-up (found by the
+    docker-compose stack check). Engines/clients created after setup() are traced, hence setup() must run before
+    service modules build their engines."""
+    for library, module_name, class_name in _OPTIONAL_INSTRUMENTORS:
+        if importlib.util.find_spec(library) is None:
+            continue
+        instrumentor = getattr(importlib.import_module(module_name), class_name)
+        instrumentor().instrument()

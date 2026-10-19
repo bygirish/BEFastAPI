@@ -29,6 +29,7 @@ class OutboxRelay:
         interval_seconds: float = 0.5,
         batch_size: int = 100,
         max_attempts: int = 10,
+        max_backoff_seconds: float = 30.0,
     ) -> None:
         self._service = service
         self._store = store
@@ -36,6 +37,7 @@ class OutboxRelay:
         self._interval = interval_seconds
         self._batch = batch_size
         self._max_attempts = max_attempts
+        self._max_backoff = max_backoff_seconds
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
         self._log = get_logger("events.relay")
@@ -65,14 +67,38 @@ class OutboxRelay:
                 self._log.error("outbox_dead_lettered", count=stats.dead, service=self._service)
             return stats
 
+    def _delay_after(self, consecutive_failures: int) -> float:
+        """Normal interval when healthy; doubling (capped) while the store keeps failing."""
+        if consecutive_failures == 0:
+            return self._interval
+        return float(min(self._interval * (2**consecutive_failures), self._max_backoff))
+
     async def _loop(self) -> None:
+        failures = 0
         while not self._stopping.is_set():
             try:
                 await self.run_once()
             except Exception:  # noqa: BLE001 - the relay must survive transient DB errors (rule O-11)
-                self._log.exception("outbox_relay_iteration_failed", service=self._service)
+                failures += 1
+                if (
+                    failures == 1
+                ):  # one full traceback, then short reminders (no log storm while the DB is down)
+                    self._log.exception("outbox_relay_iteration_failed", service=self._service)
+                else:
+                    self._log.warning(
+                        "outbox_relay_still_failing",
+                        service=self._service,
+                        consecutive_failures=failures,
+                        retry_in_seconds=self._delay_after(failures),
+                    )
+            else:
+                if failures:
+                    self._log.info(
+                        "outbox_relay_recovered", service=self._service, after_failures=failures
+                    )
+                failures = 0
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
+                await asyncio.wait_for(self._stopping.wait(), timeout=self._delay_after(failures))
 
     def start(self) -> None:
         if self._task is None:

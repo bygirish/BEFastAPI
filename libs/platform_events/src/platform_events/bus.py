@@ -19,7 +19,12 @@ class EventDeliveryError(Exception):
 
     def __init__(self, failures: dict[str, BaseException]) -> None:
         self.failures = failures
-        super().__init__(f"{len(failures)} handler(s) failed: {', '.join(sorted(failures))}")
+        # Include the underlying cause: this text ends up in the outbox row's `last_error`, which is what a human
+        # reads when a message is dead-lettered.
+        detail = "; ".join(
+            f"{name}: {type(exc).__name__}: {exc}" for name, exc in sorted(failures.items())
+        )
+        super().__init__(f"{len(failures)} handler(s) failed: {detail}"[:500])
 
 
 class EventBus(Protocol):

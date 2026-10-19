@@ -9,8 +9,6 @@ from httpx import ASGITransport
 from platform_http import ServiceHttpClient, create_application
 from platform_security.testing import TestAuth
 from {{service}}_contracts import {{Service}}Api, {{Service}}HttpClient
-from {{service}}_service.application.services.ping import Ping
-from {{service}}_service.contracts_impl import {{Service}}ApiImpl
 from {{service}}_service.infrastructure.db.models import metadata
 from {{service}}_service.module import {{Service}}Module
 from {{service}}_service.settings import {{Service}}Settings
@@ -28,7 +26,7 @@ async def api(request: pytest.FixtureRequest, tmp_path) -> AsyncIterator[{{Servi
     )
     async with app.router.lifespan_context(app):
         if request.param == "in_process":
-            yield {{Service}}ApiImpl(app.state.container.resolve(Ping))
+            yield app.state.container.resolve({{Service}}Api)  # the module's own binding: survives constructor changes
         else:
             async def token() -> str:
                 return auth.service_token()

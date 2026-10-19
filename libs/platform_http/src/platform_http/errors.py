@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_core.errors import (
     AppError,
@@ -102,3 +103,37 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_handler)
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
     app.add_exception_handler(Exception, _unhandled_handler)
+
+
+class UnhandledErrorMiddleware:
+    """Turns an unexpected exception into the uniform 500 body WHILE the request context is still alive.
+
+    Starlette's own 500 handler runs *outside* every user middleware, i.e. after `ObservabilityMiddleware` has
+    already cleared the request id — so the error body said `"request_id": null` exactly when a user needs the id
+    to report the problem (found by the "Postgres is down" debugging drill). Placed *inside* the observability
+    middleware, this one logs once (with the request id and trace id) and answers with the id filled in.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        response_started = False
+
+        async def tracking_send(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracking_send)
+        except Exception as exc:
+            _log.error("unhandled_exception", exc_info=exc)
+            if response_started:  # headers already sent: nothing sensible left to do
+                raise
+            body = error_body("INTERNAL_ERROR", "An unexpected error occurred.")
+            await JSONResponse(body, status_code=500)(scope, receive, send)

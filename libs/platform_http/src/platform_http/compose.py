@@ -17,7 +17,7 @@ from platform_core.health import HealthReport
 from platform_core.settings import PlatformSettings
 from platform_events.bus import EventBus, InProcessEventBus
 from platform_events.relay import OutboxRelay
-from platform_http.errors import install_error_handlers
+from platform_http.errors import UnhandledErrorMiddleware, install_error_handlers
 from platform_http.module import ENTRY_POINT_GROUP, ServiceModule, validate_router_prefix
 from platform_observability import (
     ObservabilityHandle,
@@ -139,6 +139,9 @@ def create_application(
             validate_router_prefix(module.name, router)
             app.include_router(router)
 
+    # Order matters: the LAST middleware added is the OUTERMOST. The error middleware must sit inside the
+    # observability one so the request id is still set when the 500 body is built.
+    app.add_middleware(UnhandledErrorMiddleware)
     app.add_middleware(ObservabilityMiddleware, known_services={m.name for m in modules})
     return app
 

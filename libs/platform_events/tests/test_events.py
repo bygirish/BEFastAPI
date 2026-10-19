@@ -57,6 +57,9 @@ async def test_bus_aggregates_handler_failures_and_isolates_handlers() -> None:
         await bus.publish(new_event())
     assert seen == ["ok"]  # failure of one handler does not block others
     assert set(info.value.failures) == {"boom"}
+    assert "RuntimeError: nope" in str(
+        info.value
+    )  # the real cause is part of the message (it lands in last_error)
 
 
 async def test_idempotent_handler_runs_once() -> None:
@@ -133,3 +136,36 @@ async def test_sql_outbox_roundtrip_with_relay() -> None:
     assert stats.published == 1 and await store.pending_count() == 0
     assert isinstance(received[0], ThingHappened)
     await engine.dispose()
+
+
+async def test_relay_backs_off_while_the_store_fails_and_recovers() -> None:
+    """Regression: with the database down the relay logged an error with a traceback every 0.5 s."""
+    import asyncio
+
+    class FlakyStore:
+        def __init__(self, failures: int) -> None:
+            self.remaining = failures
+            self.calls = 0
+
+        async def pending_count(self) -> int:
+            return 0
+
+        async def drain(self, publish, *, limit: int = 100, max_attempts: int = 10):  # type: ignore[no-untyped-def]
+            from platform_events import DrainStats
+
+            self.calls += 1
+            if self.remaining:
+                self.remaining -= 1
+                raise ConnectionError("database is down")
+            return DrainStats()
+
+    relay = OutboxRelay(
+        "tests", FlakyStore(3), InProcessEventBus(), interval_seconds=0.01, max_backoff_seconds=0.08
+    )  # type: ignore[arg-type]
+    assert relay._delay_after(0) == 0.01
+    assert relay._delay_after(1) == 0.02
+    assert relay._delay_after(2) == 0.04
+    assert relay._delay_after(10) == 0.08  # capped
+    relay.start()
+    await asyncio.sleep(0.4)
+    await relay.stop()

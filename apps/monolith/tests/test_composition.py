@@ -109,3 +109,34 @@ async def test_one_server_span_and_no_duplicate_request_metric() -> None:
     points = telemetry.data_points("http.server.request.duration")
     assert points
     assert all(p.get("app.service") == "fake" for p in points)
+
+
+class ExplodingModule(FakeModule):
+    name = "boom"
+
+    def routers(self) -> Sequence[APIRouter]:
+        router = APIRouter(prefix="/api/v1/boom")
+
+        @router.get("/now")
+        async def now() -> None:
+            raise RuntimeError("secret internals")
+
+        return [router]
+
+
+async def test_unhandled_errors_still_carry_the_request_id_and_leak_nothing() -> None:
+    """Regression (found by the 'Postgres is down' drill): the 500 body used to say request_id=null."""
+    app = create_application(
+        title="t", service_name="t", modules=[ExplodingModule()], telemetry=False
+    )
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://t") as client:
+            response = await client.get(
+                "/api/v1/boom/now", headers={"x-request-id": "req-abcdefgh"}
+            )
+    assert response.status_code == 500
+    body = response.json()["error"]
+    assert body["code"] == "INTERNAL_ERROR"
+    assert body["request_id"] == "req-abcdefgh" == response.headers["x-request-id"]
+    assert "secret internals" not in response.text

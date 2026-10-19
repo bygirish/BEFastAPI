@@ -3,7 +3,7 @@
 UV ?= uv
 
 .PHONY: help install sync lint format typecheck arch test test-service new-service scaffold-check \
-        obs-sync compose-config up down reset logs ps obs-smoke stack-check docs-check
+        obs-sync compose-config up down reset logs ps obs-smoke stack-check docs-check demo demo-down demo-status
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -76,3 +76,12 @@ stack-check: ## Boot the full stack with a throw-away service, verify, tear down
 
 docs-check: ## Docs health: links, anchors, codebase map paths, orphan pages, chapter sections (add EXTERNAL=1 to check URLs)
 	$(UV) run python tools/check_docs.py $(if $(EXTERNAL),--external,)
+
+demo: ## Live demo: boot everything with a throw-away service + background traffic (APP_PORT=18000 by default)
+	./tools/demo.sh up
+
+demo-status: ## What the demo is doing
+	./tools/demo.sh status
+
+demo-down: ## Stop the demo and remove the throw-away service
+	./tools/demo.sh down

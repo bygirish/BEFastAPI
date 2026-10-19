@@ -193,7 +193,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-store/
 
+# ----------------------------------------------------------------------------- Demo state (tools/demo.sh)
+/.demo/
+
 # ----------------------------------------------------------------------------- Scaffold leftovers
 # tools/scaffold_check.sh creates and removes these; guards against an interrupted run being committed.
 /services/scaffoldcheck/
 /apps/scaffoldcheck_api/
+# The demo service is throw-away: tools/demo.sh creates and removes it.
+/services/demo/
+/apps/demo_api/

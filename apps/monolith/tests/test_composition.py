@@ -90,3 +90,22 @@ def test_enabled_services_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert MonolithSettings().enabled_services == ["auth", "users", "files"]
     monkeypatch.delenv("ENABLED_SERVICES")
     assert MonolithSettings().enabled_services == []
+
+
+async def test_one_server_span_and_no_duplicate_request_metric() -> None:
+    """FastAPI ships its own OpenTelemetry. We keep its spans but disable its metrics/logs so the RED metric
+    exists exactly once and always carries app.service (regression test for double-counting)."""
+    from platform_observability import testing as obs_testing
+
+    telemetry = obs_testing.install()
+    telemetry.clear()
+    app = create_application(title="t", service_name="t", modules=[FakeModule()], telemetry=False)
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
+            assert (await client.get("/api/v1/fake/hello")).status_code == 200
+
+    servers = [s for s in telemetry.spans() if s.kind.name == "SERVER"]
+    assert len(servers) == 1
+    points = telemetry.data_points("http.server.request.duration")
+    assert points
+    assert all(p.get("app.service") == "fake" for p in points)

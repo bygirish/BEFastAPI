@@ -142,7 +142,7 @@ Declared once in `services/<name>/src/<name>_service/application/telemetry.py` (
 ## 6. Tracing standard
 
 - **Context propagation:** W3C `traceparent` + `tracestate` + `baggage` (restricted to `app.caller`, never PII). Inbound HTTP extracts; outbound `httpx` injects. In-process calls simply continue the current span (so monolith traces look the same as split traces, with the same span names).
-- **Auto-instrumentation** (via `platform_observability`): FastAPI/ASGI, SQLAlchemy (+asyncpg), Redis, httpx, logging correlation.
+- **Auto-instrumentation** (via `platform_observability`): FastAPI's *built-in* OpenTelemetry (server + dependency/endpoint/serialization spans; its own metrics and logs are switched off so RED metrics come only from our middleware and errors are logged once, redacted), SQLAlchemy (+asyncpg), Redis, httpx, logging correlation.
 - **Manual spans (required):**
   - one span per **use case** — `auth.RegisterUser`, kind=INTERNAL, attribute `app.service`;
   - one span per **contract call** at the adapter seam — `files_contracts.FilesApi.get_signed_url` (kind=CLIENT in both in-process and HTTP impls; the HTTP impl's span nests the httpx span). This is what makes the call graph visible in the monolith and identical after extraction;

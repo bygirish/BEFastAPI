@@ -10,16 +10,13 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from opentelemetry.metrics import NoOpMeterProvider
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -149,16 +146,6 @@ def setup(
         enabled=True,
         _providers=[tracer_provider, meter_provider, logger_provider],
         _log_handler=handler,
-    )
-
-
-def instrument_app(app: FastAPI) -> None:
-    """Server spans for FastAPI. Metrics come from ObservabilityMiddleware (carries app.service),
-    so the instrumentor's own metrics are routed to a no-op provider."""
-    FastAPIInstrumentor.instrument_app(
-        app,
-        excluded_urls="livez,readyz,startupz",
-        meter_provider=NoOpMeterProvider(),
     )
 
 

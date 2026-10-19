@@ -7,7 +7,6 @@ from platform_observability.metrics import Counter, Histogram, UpDownCounter
 from platform_observability.middleware import ObservabilityMiddleware
 from platform_observability.setup import (
     ObservabilityHandle,
-    instrument_app,
     setup,
 )
 from platform_observability.tracing import (
@@ -31,7 +30,6 @@ __all__ = [
     "current_traceparent",
     "get_logger",
     "get_request_id",
-    "instrument_app",
     "link_from_traceparent",
     "setup",
     "start_span",

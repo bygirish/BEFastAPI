@@ -9,7 +9,7 @@ dependencies = [
     "platform-http",
     "platform-observability",
     "platform-security",
-    "fastapi>=0.111",
+    "fastapi>=0.146",
     "uvicorn[standard]>=0.30",
     # >>> generated:service-deps (tools/sync_workspace.py)
     # <<< generated:service-deps

@@ -24,7 +24,6 @@ from platform_observability import (
     ObservabilityMiddleware,
     build_health_router,
     get_logger,
-    instrument_app,
     setup,
 )
 
@@ -118,7 +117,14 @@ def create_application(
             if obs is not None:
                 obs.shutdown()
 
-    app = FastAPI(title=title, lifespan=lifespan)
+    # FastAPI's built-in OpenTelemetry gives us server/operation spans. Its metrics and logs are OFF on purpose:
+    # request metrics come from ObservabilityMiddleware (carries app.service) and errors are logged once by
+    # platform_http.errors with redaction (rules O-3, O-4, O-7) — enabling both would double-count / leak.
+    app = FastAPI(
+        title=title,
+        lifespan=lifespan,
+        telemetry={"metrics": False, "logs": False, "auto_configure": False},
+    )
     app.state.container = container
     app.state.event_bus = bus
     if jwt_verifier is not None:
@@ -134,8 +140,6 @@ def create_application(
             app.include_router(router)
 
     app.add_middleware(ObservabilityMiddleware, known_services={m.name for m in modules})
-    if telemetry:
-        instrument_app(app)  # must come after add_middleware so the server span is outermost
     return app
 
 

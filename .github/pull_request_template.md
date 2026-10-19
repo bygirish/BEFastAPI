@@ -16,6 +16,7 @@
 - [ ] New/changed behaviour has spans/metrics where a business question exists; runbook updated for new alerts — O-6, O-8
 - [ ] Tests run for this service alone (`make test-service`) — B-6
 - [ ] Any rule waiver has an ADR with owner + expiry — STANDARDS §9
+- [ ] Learning docs updated for this change (`docs/learning/`, glossary/cheat-sheet/troubleshooting) — STANDARDS §11
 
 ## Test evidence
 

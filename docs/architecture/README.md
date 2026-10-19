@@ -12,7 +12,10 @@ repo and deployed separately with ≈ 1–2 days of mechanical work.**
 | [OBSERVABILITY.md](OBSERVABILITY.md) | OpenTelemetry pipeline, logging/metrics/tracing standards, SLOs & burn-rate alerts, dashboards, redaction, how observability is tested and how it survives extraction |
 | [LOCAL_ENVIRONMENT.md](LOCAL_ENVIRONMENT.md) | Docker Compose design: every service + DB + Redis + observability stack + dev tools via one `docker compose up`; Makefile workflow; acceptance criteria |
 | [EXTRACTION_PLAYBOOK.md](EXTRACTION_PLAYBOOK.md) | When to extract, readiness scorecard, step-by-step cutover, hybrid mode, rollback, time budget, quarterly drill |
+| [Learning guide for beginners](../learning/00-INDEX.md) | Study / onboarding / KT chapters per phase: analogies, diagrams, runnable examples, traps, interview questions, labs |
 | [Auth plan](../../services/auth/docs/PLAN.md) | Detailed Auth + RBAC design (re-homed into this structure; see ARCHITECTURE §14) |
+
+> **New here?** Start with the [Learning guide](../learning/00-INDEX.md). These architecture docs are the *specification*; the learning guide *teaches* them.
 
 ## The design in eight lines
 
@@ -56,7 +59,7 @@ Order matters: structure and guardrails first, then services from leaf to root o
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **A1. Foundation** ✅ *(done 2026-10-19)* | uv workspace; libs `platform_{core,events,http,security,observability}` skeletons; `apps/monolith` with `/livez` `/readyz` `/startupz`; `ServiceModule` protocol; ruff/mypy/import-linter config; `tools/new_service.py` (generates service **incl. contracts, migrations, tests, Dockerfile entry, `observability/` folder**, adds compose + init entries); PR template; CODEOWNERS; CI | `new_service.py demo` produces a service that passes all CI checks and the extraction drill |
+| **A1. Foundation** ✅ *(done 2026-10-19; learning chapters 01–08 in `docs/learning/phase-a1/`)* | uv workspace; libs `platform_{core,events,http,security,observability}` skeletons; `apps/monolith` with `/livez` `/readyz` `/startupz`; `ServiceModule` protocol; ruff/mypy/import-linter config; `tools/new_service.py` (generates service **incl. contracts, migrations, tests, Dockerfile entry, `observability/` folder**, adds compose + init entries); PR template; CODEOWNERS; CI | `new_service.py demo` produces a service that passes all CI checks and the extraction drill |
 | **A2. Local env & observability** | `docker/Dockerfile`; root `docker-compose.yml` (core + `obs` + `tools` profiles); Postgres init (schema+role per service); `keygen`, `migrate-<svc>` jobs; Collector, Prometheus, Tempo, Loki, Alertmanager, Grafana **provisioned with trace↔log↔metric correlation**; exporters + blackbox probes; base dashboards; `tools/gen_slo_rules.py`; Makefile; `tools/obs_smoke.py` | `cp .env.example .env && docker compose up` → all healthy ≤3 min; demo request visible as correlated trace/logs/metrics in Grafana; `make obs-smoke`, `make drill s=demo`, `make lint` green |
 | **B. Notifications v0** | `notifications` service: gateway/facade, Static/Console/InMemory senders, `NotificationsApi.send`, delivery log | contract tests pass on Impl + HttpClient; no dependency on other services |
 | **C. Auth** | Auth plan phases 0–6 mapped into the layer layout; `OtpDelivery` port → Notifications; JWKS; org-scoped RBAC | Auth runs standalone via `apps/auth_api`; extraction drill green |

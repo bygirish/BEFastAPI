@@ -15,7 +15,7 @@ Companion docs: [OBSERVABILITY](OBSERVABILITY.md) (details behind the O-rules) �
 Contents: [1 Boundaries](#1-boundary-rules) · [2 Layering](#2-layering-rules) · [3 Data](#3-data-rules) ·
 [4 Communication](#4-communication-rules) · [5 Cross-cutting](#5-cross-cutting-rules) · [6 Code style & testing](#6-code-style-and-testing) ·
 [7 Anti-pattern catalogue](#7-anti-pattern-catalogue) · [8 Enforcement](#8-enforcement) · [9 Exceptions process](#9-exceptions-process) ·
-[10 PR checklist](#10-pr-checklist)
+[10 PR checklist](#10-pr-checklist) · [11 Documentation is part of Definition of Done](#11-documentation-is-part-of-definition-of-done)
 
 ---
 
@@ -365,3 +365,18 @@ Copy into `.github/pull_request_template.md`:
 - [ ] No secrets/PII/OTP in logs; errors use the uniform body with a service-prefixed code — X-3, X-5
 - [ ] Tests run for this service alone; negative/security tests added where relevant — B-6, T-5
 - [ ] Any rule waiver has an ADR with owner + expiry — §9
+- [ ] Learning docs: the phase's chapter in `docs/learning/` is added/updated (commands actually run, links checked), and new terms/commands/errors are in the glossary, cheat-sheet and troubleshooting page — see §11
+
+---
+
+## 11. Documentation is part of Definition of Done
+
+Every phase ships **two kinds of docs**:
+
+| Kind | Folder | Audience | Purpose |
+|---|---|---|---|
+| Specifications | `docs/architecture/` | engineers making decisions | the rules and the reasoning (authoritative) |
+| Learning guide | `docs/learning/` | **beginner developers** (study, onboarding, KT) | teaches the ideas with analogies, diagrams, runnable examples, traps, interview questions and labs |
+
+A phase is **not done** until: (1) its chapter(s) exist, written from `docs/learning/templates/chapter-template.md`; (2) every ▶ command was run and its output pasted from reality;
+(3) external links were checked; (4) `docs/learning/00-INDEX.md`, the glossary, cheat-sheet and troubleshooting page are updated; (5) bugs found while documenting are fixed and covered by a test.

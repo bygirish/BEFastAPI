@@ -23,6 +23,7 @@ Read **code with questions**. For each stop, open the file, spend ~10 minutes, t
 | 10 | [`tools/templates/service`](../../../tools/templates/service) (the generator's output, read via [chapter A1·07](../phase-a1/07-adding-a-service-hands-on.md)) | the layers: `api → application → domain`, `infrastructure` on the side | Which file is the *only* one that imports another service's contracts? |
 | 11 | [`docker-compose.yml`](../../../docker-compose.yml) | `depends_on` conditions and the generated blocks | What would happen if `db-provision` failed? |
 | 12 | [`deploy/observability/otel-collector/config.yaml`](../../../deploy/observability/otel-collector/config.yaml) | three pipelines, two connectors | Where would you add a second backend for traces? |
+| 13 | [`services/notifications/service/src/notifications_service/application/gateway.py`](../../../services/notifications/service/src/notifications_service/application/gateway.py) (then [B·01](../phase-b/01-notifications-concepts-and-design.md)) | the `_try` method: which outcomes stop the chain, which continue | A provider hangs for 30 s. What happens, and after how long? |
 
 > 💡 **Learning Thought — read top-down by dependency, not alphabetically.** `platform_core` has no dependencies; each later stop uses the earlier ones. If a file confuses you, you skipped a stop.
 

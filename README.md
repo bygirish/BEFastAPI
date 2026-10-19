@@ -24,7 +24,7 @@ make demo                    # live demo: everything + a throw-away service + ba
 |---|---|
 | **Learn the project from scratch** (beginner friendly, with labs) | [`docs/learning/00-INDEX.md`](docs/learning/00-INDEX.md) |
 | **Join the project** (day-by-day plan, codebase map) | [Onboarding plan](docs/learning/kt/02-reading-guide-and-onboarding-plan.md) · [CONTRIBUTING](CONTRIBUTING.md) |
-| **Test yourself** (60 questions, capstone project, skills matrix) | [Assessments](docs/learning/assessments/01-question-bank.md) |
+| **Test yourself** (70 questions, capstone project, skills matrix) | [Assessments](docs/learning/assessments/01-question-bank.md) |
 | Look up a rule, a command or an error | [Cheat-sheet](docs/learning/cheatsheet.md) · [Glossary](docs/learning/glossary.md) · [Troubleshooting](docs/learning/troubleshooting.md) |
 | Understand the architecture decisions | [`docs/architecture/`](docs/architecture/README.md) |
 | Know what the code must / must not do | [`docs/architecture/STANDARDS.md`](docs/architecture/STANDARDS.md) |
@@ -43,5 +43,5 @@ docs/       architecture/ (specifications) · learning/ (beginner guide)
 
 ## Status
 
-Phases A1 (foundation) and A2 (Docker Compose + observability stack) are implemented and verified. Next: Notifications → Auth → Users → Files.
+Phases A1 (foundation), A2 (Docker Compose + observability stack) and B (**Notifications**: vendor-neutral gateway, failover, delivery log) are implemented and verified. Next: Auth → Users → Files.
 See the [roadmap](docs/architecture/README.md#roadmap-no-code-yet).

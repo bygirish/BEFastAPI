@@ -3,7 +3,7 @@
 **Goal:** know what every folder and important file is for, so you can find things without searching.
 **How to use:** skim once, then keep it open while you read code. **Every path in the first column is checked by `make docs-check`** — if a file is renamed or deleted and this page isn't updated, CI fails (so this map can't silently rot).
 
-> A path containing `<name>` stands for "every service" (e.g. `services/<name>/…`). Services are created by the generator, so none exist yet besides planning docs.
+> A path containing `<name>` stands for "every service" (e.g. `services/<name>/…`). Services are created by the generator; **`notifications` is the first real one** (its own section below).
 
 ---
 
@@ -81,6 +81,36 @@
 | `services/<name>/observability/` | `slo.yaml`, alert rules, dashboards, `runbook.md` |
 | `services/auth/docs/PLAN.md` | The (not yet built) Auth + RBAC design |
 
+## `services/notifications/` — the Notifications service (Phase B)
+
+| Path | What it is |
+|---|---|
+| `services/notifications/contracts/src/notifications_contracts/api.py` | `NotificationsApi`: `send`, `get_delivery` — the only thing other services call |
+| `services/notifications/contracts/src/notifications_contracts/dto.py` | `Channel`, `SendRequest`, `SendResult`, `DeliveryInfo` |
+| `services/notifications/contracts/src/notifications_contracts/errors.py` | Contract errors (invalid request, rate limited, idempotency conflict, not found, unavailable) |
+| `services/notifications/contracts/src/notifications_contracts/events.py` | `DeliveryFailed` (`notifications.delivery_failed.v1`, no PII) |
+| `services/notifications/contracts/src/notifications_contracts/http_client.py` | `NotificationsHttpClient`: maps the uniform HTTP error body back to the same exceptions |
+| `services/notifications/service/src/notifications_service/domain/recipients.py` | Normalise / mask / keyed-digest recipients |
+| `services/notifications/service/src/notifications_service/domain/templates.py` | Built-in templates and strict rendering |
+| `services/notifications/service/src/notifications_service/domain/providers.py` | The closed set of provider names and the dev-only subset |
+| `services/notifications/service/src/notifications_service/domain/delivery.py` | The `Delivery` entity and its state changes |
+| `services/notifications/service/src/notifications_service/application/ports.py` | `Sender` port, `SenderRejected` / `SenderUnavailable`, repository and UoW ports |
+| `services/notifications/service/src/notifications_service/application/gateway.py` | `NotificationGateway`: the provider chain, timeouts and failover policy |
+| `services/notifications/service/src/notifications_service/application/services/send_notification.py` | `SendNotification` and `GetDelivery` use cases (two short transactions around the provider call) |
+| `services/notifications/service/src/notifications_service/application/telemetry.py` | Business metrics and `prime_metrics` (series start at 0) |
+| `services/notifications/service/src/notifications_service/infrastructure/providers/registry.py` | Provider name → adapter, and per-channel chains |
+| `services/notifications/service/src/notifications_service/infrastructure/providers/smtp.py` | Email over SMTP (Mailpit locally) |
+| `services/notifications/service/src/notifications_service/infrastructure/providers/console.py` | DEV ONLY: prints the message in the log |
+| `services/notifications/service/src/notifications_service/infrastructure/db/repository.py` | SQL implementation of the delivery repository |
+| `services/notifications/service/src/notifications_service/api/internal/router.py` | Service-to-service routes (`/internal/v1/notifications/…`) |
+| `services/notifications/service/src/notifications_service/api/dev/router.py` | DEV ONLY routes, mounted only when `NOTIFICATIONS_DEV_ENDPOINTS=true` |
+| `services/notifications/service/src/notifications_service/settings.py` | `NOTIFICATIONS_*` settings and the production guard (rule X-11) |
+| `services/notifications/service/src/notifications_service/testing.py` | Test harness shared by the service's tests |
+| `services/notifications/service/compose.env` | Container env for the local stack (provider chains, Mailpit host, dev switches) |
+| `services/notifications/service/migrations/versions/0002_deliveries.py` | The delivery-log table |
+| `services/notifications/observability/slo.yaml` | Availability, latency and the **delivery** SLO |
+| `services/notifications/README.md` | Service card: ownership, routes, providers, layout |
+
 ## `tools/` — repository automation
 
 | Path | What it is |
@@ -96,7 +126,8 @@
 | `tools/demo.sh` | `make demo`: boots everything with a throw-away `demo` service + background traffic; `down` removes it again |
 | `tools/demo_traffic.py` | Background traffic generator for the demo (healthy, slow, 4xx and 5xx requests) |
 | `tools/check_docs.py` | Documentation health check (links, anchors, this map, orphans, chapter sections) |
-| `tools/tests` | Tests for the tools themselves |
+| `tools/templates/service/service/compose.env.tmpl` | Template of a service's `compose.env` (extra container env, copied into `docker-compose.yml` by the sync) |
+| `tools/tests` | Tests for the tools themselves (generator, workspace sync incl. `compose.env`, observability incl. `counter_ratio` SLOs) |
 
 ## `deploy/` and `docker/` — running it
 
@@ -142,6 +173,7 @@
 | `docs/learning/foundations` | Python, HTTP/FastAPI, databases and testing basics (F·01–04) |
 | `docs/learning/phase-a1` | Phase A1 chapters (foundation) |
 | `docs/learning/phase-a2` | Phase A2 chapters (Docker, Compose, observability) |
+| `docs/learning/phase-b` | Phase B chapters (Notifications: design, live run, lessons, vendor-adapter lab) |
 | `docs/learning/kt` | This KT pack: map, reading plan, patterns, diagrams, decisions, debugging, roadmap |
 | `docs/learning/assessments` | Question bank, capstone project, skills matrix |
 | `docs/learning/templates/chapter-template.md` | The format every chapter follows |

@@ -105,6 +105,26 @@
 - **Decision:** `make stack-check` boots everything and verifies log → trace → metric correlation.
 - **Why:** it found ten problems (missing production dependency, double-formatting log handler, silent migration rollback, wrong metric names …) that unit tests could not. See [A2 · 04](../phase-a2/04-what-the-live-run-taught-us.md).
 
+## D21 · Notifications is a gateway: rejection stops, unavailability fails over
+- **Decision:** one `NotificationGateway` walks an ordered provider chain per channel; a permanent rejection ends the walk, transient errors/timeouts move on; vendors sit behind a three-outcome `Sender` port.
+- **Rejected:** "try everyone"; per-vendor methods on the contract (`send_via_twilio`).
+- **Why:** another vendor can't fix a bad number, but can survive an outage; the contract stays vendor-free so vendors change by configuration.
+
+## D22 · Two short transactions around the provider call (at-least-once)
+- **Decision:** commit `pending`, call the provider with no transaction open, commit `sent`/`failed`.
+- **Rejected:** one transaction around everything (pins connections for seconds); at-most-once (drops messages on a crash).
+- **Why:** a duplicate OTP is annoying, a missing one locks a user out. The window is documented, not hidden.
+
+## D23 · Dev-only adapters refuse to start in production (rule X-11)
+- **Decision:** console/memory/static senders, dev endpoints and the default pepper are checked by a settings validator; `ENV=production` + any of them ⇒ the process exits.
+- **Rejected:** "remember not to" and runtime `if ENV == prod` checks scattered in code (rule X-10).
+- **Why:** these failures are silent (OTPs in logs, fake success). Fail loudly, early, in one place.
+
+## D24 · A business SLO for delivery, with every series pre-created
+- **Decision:** a `counter_ratio` SLO (failed ÷ all deliveries) generated from `slo.yaml`; label values are closed sets, so all series are published at 0 on start-up.
+- **Rejected:** relying on HTTP availability (a 200 says nothing about delivery); creating series lazily (the first failures are invisible to `rate()`).
+- **Why:** found by running it — see [B · 03](../phase-b/03-what-the-live-run-taught-us.md).
+
 ---
 
 ## How to challenge a decision

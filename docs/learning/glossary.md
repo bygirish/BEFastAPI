@@ -110,6 +110,30 @@ Plain-English definitions, in the order you will meet them. 🔗 = see the chapt
 | **Error budget** | `1 − objective` — how much failure the SLO allows (0.1 % for 99.9 %). |
 | **Burn rate** | How many times faster than "exactly on budget" the budget is being spent. |
 
+## Notifications (Phase B)
+| Term | Meaning |
+|---|---|
+| **Channel** | The kind of message: `sms` or `email`. 🔗 [B·01](phase-b/01-notifications-concepts-and-design.md) |
+| **Provider / vendor** | The company or server that actually delivers a message (an SMS vendor, an SMTP relay). |
+| **Sender (adapter)** | Our small class talking to *one* provider; the only vendor-specific code. 🔗 [B·04](phase-b/04-lab-add-a-vendor-adapter.md) |
+| **Gateway (facade)** | The one object that owns the provider chain and the failover policy. |
+| **Provider chain** | Ordered list of providers per channel (`smtp,console`), tried left to right. |
+| **Failover** | Trying the next provider because the previous one was unavailable or timed out (never after a rejection). |
+| **Rejection** | A provider's permanent "no" (bad number/address). Stops the chain. |
+| **Template** | A built-in message with placeholders; callers send a name plus variables, never free text. |
+| **Delivery** | Our record of one attempt to reach one recipient: `pending → sent | failed`. |
+| **Idempotency key** | Caller-chosen string; repeating a request with the same key returns the first result instead of acting twice. |
+| **At-least-once delivery** | A message may be delivered more than once after a crash, but is never silently lost. 🔗 [B·01 §1.2](phase-b/01-notifications-concepts-and-design.md) |
+| **E.164** | The international phone-number format: `+` country code and digits, e.g. `+14155550123`. |
+| **Masked recipient** | `a***@example.com` / `+14*******23`: what we store and log instead of the real address. |
+| **Keyed digest (HMAC)** | A hash of the recipient mixed with a secret *pepper*, used to count messages per person without storing the address. |
+| **Pepper** | A secret mixed into hashes (like a salt, but shared and secret). |
+| **SMS pumping** | Fraud where attackers trigger OTP messages to premium-rate numbers they profit from; defended by per-recipient caps. |
+| **Dev-only adapter** | console / in-memory / static senders and the dev endpoints; refuse to start in production (rule X-11). |
+| **Mailpit** | A fake SMTP server with a web inbox (`http://localhost:8025`) used in the `tools` profile. |
+| **Counter priming** | Publishing every metric series at 0 on start-up so the first increments are visible to `rate()`. 🔗 [B·03](phase-b/03-what-the-live-run-taught-us.md) |
+| **`counter_ratio` SLO** | An SLO defined as bad-counter ÷ total-counter (e.g. failed deliveries ÷ all deliveries) in `slo.yaml`. |
+
 ## Testing & process (Foundations / KT)
 | Term | Meaning |
 |---|---|

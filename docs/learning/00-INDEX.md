@@ -15,7 +15,7 @@
 
 | You are… | Do this | Time |
 |---|---|---|
-| 🌱 **New to backend development** | [Foundations F·01–04](#foundations--the-skills-underneath-everything) → [Phase A1](#phase-a1--foundation) → [Phase A2](#phase-a2--local-environment--observability-stack) → [KT pack](#kt-pack--project-knowledge-transfer) → [capstone](assessments/02-capstone-project.md) | ~1–2 weeks part-time |
+| 🌱 **New to backend development** | [Foundations F·01–04](#foundations--the-skills-underneath-everything) → [Phase A1](#phase-a1--foundation) → [Phase A2](#phase-a2--local-environment--observability-stack) → [Phase B](#phase-b--the-notifications-service) → [KT pack](#kt-pack--project-knowledge-transfer) → [capstone](assessments/02-capstone-project.md) | ~1–2 weeks part-time |
 | 🚀 **Joining the project this week** | [KT·02 onboarding plan](kt/02-reading-guide-and-onboarding-plan.md) (day-by-day), then [KT·01 codebase map](kt/01-codebase-map.md) and the [cheat-sheet](cheatsheet.md) | 1 day to productive, 1 week to confident |
 | 🔧 **Experienced, need the facts** | [Cheat-sheet](cheatsheet.md) · [glossary](glossary.md) · [troubleshooting](troubleshooting.md) · [decision log](kt/05-decision-log-in-plain-english.md) · formal specs in [`docs/architecture/`](../architecture/README.md) | minutes |
 | 🧭 **Reviewing / owning a service** | [Design patterns](kt/03-design-patterns-catalog.md) · [diagrams](kt/04-architecture-diagrams.md) · [debugging playbook](kt/06-debugging-playbook.md) · [skills matrix](assessments/03-skills-matrix.md) | half a day |
@@ -74,15 +74,26 @@ The project is a **modular monolith**: one deployable app made of independent *s
 | 03 | [The observability stack in practice](phase-a2/03-the-observability-stack-in-practice.md) | Log → trace → metric → exemplar → dashboard → SLO alert; collector config |
 | 04 | [What the live run taught us](phase-a2/04-what-the-live-run-taught-us.md) | Ten real failures found only by running the real system |
 
+## Phase B — The Notifications service
+
+The first real service: a **vendor-neutral gateway** that delivers templated SMS/email through a chain of providers with failover, an idempotency key, a per-recipient rate cap, a privacy-safe delivery log, a business SLO — and dev-only senders that *refuse to start in production*. Auth (Phase C) will use it to deliver OTPs.
+
+| # | Chapter | You will learn |
+|---|---|---|
+| 01 | [Concepts and design](phase-b/01-notifications-concepts-and-design.md) | Gateway/adapter/failover, templates, idempotency, at-least-once delivery, masked recipients, the code walk-through |
+| 02 | [Hands-on with the live stack](phase-b/02-hands-on-live-stack.md) | Send mail into Mailpit, cause a failover, replay a key, hit the rate cap, break every provider and watch the SLO |
+| 03 | [What the live run taught us](phase-b/03-what-the-live-run-taught-us.md) | Eight real problems (a lost error body, an SLO that matched nothing, counters invisible to `rate()`, rules Prometheus never reloaded …) and what guards each |
+| 04 | [Lab: add a vendor adapter](phase-b/04-lab-add-a-vendor-adapter.md) | One file + three registrations; mapping vendor status codes to accepted / rejected / unavailable |
+
 ## KT pack — project knowledge transfer
 
 | # | Page | Use it to… |
 |---|---|---|
 | KT·01 | [Codebase map](kt/01-codebase-map.md) | find what every folder/file is for (paths are CI-checked) |
 | KT·02 | [Reading guide & onboarding plan](kt/02-reading-guide-and-onboarding-plan.md) | read the code in the right order; follow a day-by-day plan |
-| KT·03 | [Design patterns catalogue](kt/03-design-patterns-catalog.md) | name the 16 patterns used here, see where, and when *not* to use them |
+| KT·03 | [Design patterns catalogue](kt/03-design-patterns-catalog.md) | name the 17 patterns used here, see where, and when *not* to use them |
 | KT·04 | [Architecture diagrams](kt/04-architecture-diagrams.md) | explain the system in pictures (context, containers, components, sequences, data ownership, extraction) |
-| KT·05 | [Decision log in plain English](kt/05-decision-log-in-plain-english.md) | learn *why* — 20 decisions, rejected alternatives, trade-offs |
+| KT·05 | [Decision log in plain English](kt/05-decision-log-in-plain-english.md) | learn *why* — 24 decisions, rejected alternatives, trade-offs |
 | KT·06 | [Debugging playbook](kt/06-debugging-playbook.md) | diagnose problems with a six-step method and five live drills |
 | KT·07 | [Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) | prepare for the next phases |
 | KT·08 | [Demo script](kt/08-demo-script.md) | present the whole platform live in 15–20 minutes (`make demo`) |
@@ -91,7 +102,7 @@ The project is a **modular monolith**: one deployable app made of independent *s
 
 | # | Page | What it gives you |
 |---|---|---|
-| 01 | [Question bank](assessments/01-question-bank.md) | 60 questions with answers + 7 scenarios, grouped by topic |
+| 01 | [Question bank](assessments/01-question-bank.md) | 70 questions with answers + 7 scenarios, grouped by topic |
 | 02 | [Capstone project: Bookmarks service](assessments/02-capstone-project.md) | a full end-to-end build, milestones, acceptance output, hints, rubric |
 | 03 | [Skills matrix](assessments/03-skills-matrix.md) | four levels × eleven skill areas; honest self-assessment |
 
@@ -101,7 +112,7 @@ The project is a **modular monolith**: one deployable app made of independent *s
 
 ## Upcoming phases (chapters are added as each phase lands)
 
-See [KT·07 Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) for what is built next (Notifications → Auth + RBAC → Users → Files → split rehearsal) and what to read beforehand.
+See [KT·07 Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) for what is built next (Auth + RBAC → Users → Files → split rehearsal) and what to read beforehand.
 
 ## Where the "official" rules live
 

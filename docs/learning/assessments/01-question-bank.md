@@ -1,6 +1,6 @@
 # Assessment · 01 — Question Bank
 
-**Goal:** one place to test yourself on everything in this guide — 60 questions with model answers, grouped by topic, each pointing to the chapter that teaches it.
+**Goal:** one place to test yourself on everything in this guide — 70 questions with model answers, grouped by topic, each pointing to the chapter that teaches it.
 **How to use:** (1) cover the answers and answer aloud or in writing; (2) mark ✅/❌; (3) re-read the linked chapter for every ❌; (4) repeat in a week. Interviewers and code reviewers ask exactly these kinds of things.
 
 > **Scoring guide:** 50+ ✅ → you can review others' changes; 40–49 → you can contribute independently; 30–39 → keep going through the chapters; < 30 → start with [Foundations](../foundations/01-python-for-this-codebase.md).
@@ -81,6 +81,18 @@
 59. **Compose vs Kubernetes?** *Compose: containers on one machine (dev/CI); Kubernetes: scheduling, scaling and self-healing across a cluster.*
 60. **Why run the real stack even when unit tests pass?** *It finds assembly problems unit tests can't — we found ten ([A2·04](../phase-a2/04-what-the-live-run-taught-us.md)).*
 
+## I. Messaging & Notifications  ([B·01–04](../phase-b/01-notifications-concepts-and-design.md))
+61. **Why wrap vendors in a gateway instead of calling one SDK directly?** *Vendors change, fail and differ; a port plus a gateway lets us swap or chain them by configuration while callers keep one contract.*
+62. **A provider says "invalid number". Should the gateway try the next provider?** *No. A rejection describes the request; another vendor would reject too (extra cost, spam risk). Only unavailability/timeouts fail over.*
+63. **Why are callers allowed to send only a template name plus variables?** *No free text means no phishing/spam cannon from a stolen credential, and exact variable checking catches broken messages before they ship.*
+64. **What does the delivery log store, and what must it never store?** *Channel, template, masked recipient, keyed digest, status, provider, attempts, error code. Never the message body, OTPs or the full address/number.*
+65. **Why a keyed digest (HMAC) rather than a plain hash of the phone number?** *Phone numbers are low-entropy: a plain hash can be brute-forced from a leaked table; a secret pepper prevents that while still allowing per-person counting.*
+66. **Explain "at-least-once" in the send flow.** *We commit `pending`, call the provider, then commit the result. A crash in between can leave `pending` although the message went out; a retry may send again — duplicates over silent loss.*
+67. **What is SMS pumping, and what is our defence?** *Attackers trigger OTPs to premium-rate numbers they profit from. A per-recipient hourly cap (`429` + `Retry-After`) plus normalised recipients limits the bill.*
+68. **Why must the console/static senders fail to start in production?** *They print OTPs or fake success. A start-up validation (rule X-11) turns a silent security failure into a loud, early one.*
+69. **Why can an SLO query silently match nothing, and how do you notice?** *PromQL treats unknown names as empty. Look at a non-empty result once, validate names at generation time, and alert on absent data.*
+70. **A counter series is born at 3. What does `rate()` report for that jump?** *Nothing — no earlier sample to subtract. Publish known series at 0 on start-up.*
+
 ## H. Scenario questions (discuss, don't just recite)
 - **S1.** *A user reports an intermittent 500 at 14:03. Walk through your first five minutes.* → request id → Loki → trace → RED dashboard for that route → was it one request or many? ([KT·06](../kt/06-debugging-playbook.md))
 - **S2.** *Users service needs the avatar URL from Files. Which files do you touch and what do you not touch?* → port in Users; adapter importing `files_contracts`; binding in `apps/*`; **not** Files' internals or tables.
@@ -89,6 +101,7 @@
 - **S5.** *The p95 panel looks wrong (a 700 ms request shows as ~975 ms). Bug?* → No: histogram percentiles interpolate within buckets; precision is set by bucket bounds.
 - **S6.** *The migration job succeeded but the app says "relation does not exist".* → uncommitted transaction in `env.py`; check the table, not the exit code.
 - **S7.** *You want to add a metric label `user_id`. Response?* → No: unbounded cardinality; put ids on traces/logs, labels from closed sets (O-5).
+- **S8.** *Your SMS vendor has a 40-minute outage. What did users and operators see, and what do you change afterwards?* → failover to the next provider (or `503` + `delivery_failed` events if none), `provider_failover`/attempt metrics spike, the delivery SLO burns; afterwards put a healthy provider first and add a second vendor ([B·02 §2.9](../phase-b/02-hands-on-live-stack.md), [B·04](../phase-b/04-lab-add-a-vendor-adapter.md)).
 
 ## ✅ Self-check
 - [ ] I scored 40+ and re-read the chapters for every miss.

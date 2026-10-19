@@ -130,6 +130,30 @@ Work through: (1) is there traffic in the time range? (2) does the metric exist?
 ### 32. `make docs-check` fails: "codebase map lists a path that does not exist" / "orphan page" / "anchor not found"
 - Renamed/deleted a file? Update `docs/learning/kt/01-codebase-map.md`. New page? Link it from `docs/learning/00-INDEX.md`. Anchor: GitHub slugs drop punctuation and emoji and turn spaces into hyphens (`## 2.1 The problem` → `#21-the-problem`).
 
+### 33. pytest: `ModuleNotFoundError: No module named 'conftest'`
+- **Cause:** the repo runs pytest in `importlib` mode; `conftest.py` provides fixtures but is not an importable module. **Fix:** put shared helper code in the package (e.g. `notifications_service/testing.py`) and import that. 🔗 [B·03 P6](phase-b/03-what-the-live-run-taught-us.md)
+
+### 34. A Prometheus query / alert returns nothing (empty result, no error)
+- **Cause:** a misspelt or un-suffixed name — PromQL treats an unknown metric as "no series". Counters exported via OpenTelemetry end in `_total`, histograms in `_seconds_bucket/_count/_sum`. **Fix:** `curl -s localhost:9090/api/v1/label/__name__/values` and copy the real name; `counter_ratio` SLOs are now validated to end in `_total`. 🔗 [B·03 P3](phase-b/03-what-the-live-run-taught-us.md)
+
+### 35. The SLO ratio is `0` or `NaN` although errors just happened
+- **Cause:** a counter series that first appears already at N has no earlier sample, so `rate()`/`increase()` see no change; or there was simply no traffic in the window (`0/0 = NaN`). **Fix:** publish all closed-set series at 0 on start-up (`prime_metrics`); widen the window or send traffic. 🔗 [B·03 P4](phase-b/03-what-the-live-run-taught-us.md)
+
+### 36. `refusing to start in production: dev-only providers ['console'] are configured; …`
+- **Cause:** `ENV=production` with a development setting (console/memory/static provider, `NOTIFICATIONS_DEV_ENDPOINTS=true`, or the default `NOTIFICATIONS_DIGEST_PEPPER`). It is deliberate (rule X-11). **Fix:** configure a real provider chain and a real pepper; never "work around" it. 🔗 [B·02 §2.12](phase-b/02-hands-on-live-stack.md)
+
+### 37. My email went to the app log instead of Mailpit
+- **Cause:** the chain is `smtp,console`; if Mailpit is stopped or the `tools` profile is off, `smtp` is `unavailable` and the gateway **fails over** to `console` (a feature, shown by `attempts: 2` and a `provider_failover` log line). **Fix:** `docker compose up -d mailpit` (and `COMPOSE_PROFILES=obs,tools`). 🔗 [B·02 §2.5](phase-b/02-hands-on-live-stack.md)
+
+### 38. Dev endpoint answers `429 NOTIFICATIONS_RATE_LIMITED`
+- **Cause:** more than `NOTIFICATIONS_RATE_LIMIT_PER_HOUR` deliveries to the same (normalised) recipient in the last hour. **Fix:** use another recipient, or `NOTIFICATIONS_RATE_LIMIT_PER_HOUR=500 docker compose up -d --wait app`. `Retry-After` says when the oldest delivery leaves the window.
+
+### 39. `422 NOTIFICATIONS_TEMPLATE_VARIABLES` with `missing`/`unexpected` lists
+- **Cause:** templates need *exactly* their variables (`otp`: `code`, `ttl_minutes`; `welcome`: `name`; `password_changed`: none). The `details` field names what is missing or extra.
+
+### 40. A new service's SLO alerts are missing in Prometheus (`group <svc>-slo not loaded`)
+- **Cause:** `make obs-sync` wrote the rule files, but a Prometheus that was **already running** doesn't watch them (it reads rules at start and on reload). `make stack-check` hit this on a stack that had been up for a while. **Fix:** `docker compose kill -s HUP prometheus` (SIGHUP = reload config and rules); `make up`, `make stack-check` and `make demo` now do this for you.
+
 ---
 
 ## A debugging recipe that always works

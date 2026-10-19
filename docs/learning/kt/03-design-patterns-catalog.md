@@ -23,6 +23,7 @@
 | 14 | Fake / Null Object | A harmless stand-in | `InMemoryOutbox`, `FixedClock`, `StaticKeyProvider` |
 | 15 | Retry with backoff + idempotency key | Survive transient failures safely | [`client.py`](../../../libs/platform_http/src/platform_http/client.py) |
 | 16 | Template (scaffolding) | Generate correct-by-construction code | [`new_service.py`](../../../tools/new_service.py) |
+| 17 | Gateway with failover (Chain of Responsibility + Strategy) | One door in front of interchangeable vendors, with a policy for failure | [`gateway.py`](../../../services/notifications/service/src/notifications_service/application/gateway.py) |
 
 ---
 
@@ -113,6 +114,12 @@ bus.subscribe("auth.user_registered.v1", idempotent("users.create_profile", stor
 **Problem:** "copy the last service and edit" copies old mistakes.
 **Solution:** a generator producing a known-good skeleton, guarded by a CI scaffold check ([A1 · 08](../phase-a1/08-quality-gates-and-ci.md)).
 
+## 17. Gateway with failover (Chain of Responsibility + Strategy)
+**Problem:** a business capability (deliver a message) is provided by vendors that differ, change and fail.
+**Solution:** callers talk to one gateway; each vendor is a *strategy* behind a tiny port (`Sender`: accepted / rejected / unavailable); the gateway walks an ordered *chain* of them and owns the policy — **rejection stops the chain, transient failure moves to the next link**, every attempt is bounded by a timeout and recorded.
+**Where:** `NotificationGateway` + `infrastructure/providers/*` ([B · 01](../phase-b/01-notifications-concepts-and-design.md)); add a vendor in one file ([B · 04](../phase-b/04-lab-add-a-vendor-adapter.md)).
+**Don't:** hide *why* a provider failed (record every attempt), retry non-idempotent vendor calls blindly, or let a vendor's vocabulary leak into the contract.
+
 ---
 
 ## Patterns we deliberately did **not** adopt (yet) — and why
@@ -140,7 +147,7 @@ bus.subscribe("auth.user_registered.v1", idempotent("users.create_profile", stor
 4. **When would you *not* introduce a pattern?** *When the problem hasn't appeared yet; each pattern adds indirection that must pay for itself.*
 
 ## ✅ Self-check
-- [ ] I can name the pattern in any of the 16 locations above.
+- [ ] I can name the pattern in any of the 17 locations above.
 - [ ] I can explain one "don't" per pattern.
 - [ ] I know which patterns we skipped on purpose and why.
 

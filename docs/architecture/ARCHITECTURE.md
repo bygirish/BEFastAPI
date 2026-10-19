@@ -189,7 +189,7 @@ The composition root (`platform_http.create_application`) loops over the enabled
 | **auth** | credentials, login identities (phone/email/google), sessions, refresh tokens, OTP challenges, lockout, **orgs, memberships, roles/permissions** | `AuthApi` (verify-principal helpers, get-membership, get-org), events `auth.user_registered.v1`, `auth.user_locked.v1`, `auth.org_member_added.v1`, … | `notifications` (send OTP/invite messages) |
 | **users** | profile (display name, avatar ref, locale, timezone, preferences), user-facing settings | `UsersApi` (get profile(s) by id, batch) | `files` (avatar), reacts to `auth.user_registered.v1` |
 | **files** | file metadata, storage keys, upload sessions, ACL links | `FilesApi` (create upload, get signed url, delete), events `files.file_uploaded.v1` | none |
-| **notifications** | templates, delivery attempts, provider routing (SMS/email/push), user notification preferences | `NotificationsApi.send(message)`; events `notifications.delivery_failed.v1` | none (must not depend on auth/users; recipients are passed in) |
+| **notifications** | built-in templates, the delivery log (masked recipient + keyed digest, never the body), the provider chain per channel (SMS/email; push later), per-recipient rate cap; user notification preferences *(later)* | `NotificationsApi.send(request)` / `get_delivery(id)`; events `notifications.delivery_failed.v1` | none (must not depend on auth/users; recipients are passed in) |
 
 Dependency graph (must remain a DAG):
 
@@ -205,6 +205,10 @@ Boundary calls worth recording now (so they don't get re-argued later):
 - **OTP.** *Auth owns the OTP code* (generation, hash, expiry, attempts, static-OTP test mode) because it is a security decision.
   *Notifications owns delivery*. The vendor-neutral facade described in the Auth plan becomes the Notifications gateway;
   Auth talks to it through its own `OtpDelivery` port.
+- **Notifications is a gateway, not a mailer.** One `NotificationGateway` walks an ordered *provider chain* per channel
+  (`NOTIFICATIONS_EMAIL_PROVIDERS=smtp,console`): a transient failure or timeout fails over to the next provider, a permanent
+  rejection (bad number) stops the walk. Vendors are adapters behind the `Sender` port (rule X-7); the dev-only ones refuse to
+  start in production (rule X-11). Callers name a *template* and pass variables — there is no free-text send.
 - **Identity everywhere.** Other services never call Auth to "check a token". They verify the JWT locally (JWKS) with
   `platform_security` and read the `Principal`. See §8.
 

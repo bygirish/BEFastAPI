@@ -33,6 +33,8 @@ BEFastAPI/
 └── services/<name>/observability/  # slo.yaml, alerts.rules.yaml, dashboards/, runbook.md (travel with the service)
 ```
 
+Per-service container env (added in Phase B): a service may ship `services/<name>/service/compose.env` (one `KEY=VALUE` per line, `${VAR:-default}` allowed). `tools/sync_workspace.py` copies it into the generated `app-env` block of `docker-compose.yml`, so nobody hand-edits compose (rule E-1) and you can override a value from your shell (`NOTIFICATIONS_EMAIL_PROVIDERS=static docker compose up -d app`). Mailpit (profile `tools`) is the fake SMTP inbox the Notifications `smtp` provider talks to.
+
 Deviations from the first draft of this design (decided while building):
 - **`db-provision` job instead of Postgres init scripts.** Files in `/docker-entrypoint-initdb.d` only run when the data volume is first created, so a service added later would
   never get its schema. A one-shot job that runs idempotent SQL on *every* `up` fixes that.

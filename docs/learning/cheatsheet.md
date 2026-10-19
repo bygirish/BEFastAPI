@@ -34,6 +34,24 @@ docker compose exec -T prometheus promtool check rules /etc/prometheus/generated
 
 **Find a request:** Grafana → Explore → Loki → `{service_name=~".+"} |= "<request-id>"` → *Open trace* → *Logs for this span*.
 
+## Notifications (Phase B)
+```bash
+B=http://localhost:18000/api/v1/notifications/dev        # dev-only routes (NOTIFICATIONS_DEV_ENDPOINTS=true in the local stack)
+curl -s -X POST $B/send -H 'content-type: application/json' -d '{"channel":"email","recipient":"dev@example.com","template":"otp"}'
+curl -s localhost:8025/api/v1/messages                   # Mailpit inbox (UI: http://localhost:8025)
+docker compose stop mailpit                              # then send again: smtp unavailable -> failover to console
+NOTIFICATIONS_EMAIL_PROVIDERS=static NOTIFICATIONS_STATIC_OUTCOME=unavailable docker compose up -d --wait app   # simulate an outage (503 + delivery_failed)
+docker compose up -d --wait app                          # drop the overrides again
+docker compose exec -T postgres psql -U postgres -d befastapi -c "select * from notifications.deliveries order by created_at desc limit 5;"
+```
+| Setting | Meaning |
+|---|---|
+| `NOTIFICATIONS_EMAIL_PROVIDERS` / `NOTIFICATIONS_SMS_PROVIDERS` | provider chains, comma separated, left to right (`console`, `memory`, `static`, `smtp`) |
+| `NOTIFICATIONS_STATIC_OUTCOME` | `accept` \| `reject` \| `unavailable` (for the `static` provider) |
+| `NOTIFICATIONS_RATE_LIMIT_PER_HOUR` | deliveries per recipient per hour (default 5; local stack 50) |
+| `NOTIFICATIONS_DEV_ENDPOINTS` | mounts the dev routes. **Refused with `ENV=production`** (rule X-11, as are console/memory/static and the default pepper) |
+| status codes | `422` bad input / rejected recipient · `429` rate cap (`Retry-After`) · `409` idempotency conflict · `503` every provider failed |
+
 ## Where does this code go?
 | I am writing… | Put it in… | Allowed to import |
 |---|---|---|

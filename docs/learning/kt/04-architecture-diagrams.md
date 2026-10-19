@@ -179,6 +179,29 @@ flowchart LR
   loki & tempo & prom --> graf["Grafana (linked by trace_id)"]
 ```
 
+## 9. Sending a notification, with failover
+
+```mermaid
+sequenceDiagram
+  participant C as Caller (Auth, later)
+  participant U as SendNotification
+  participant D as notifications schema
+  participant G as NotificationGateway
+  participant S as smtp (Mailpit)
+  participant K as console
+  C->>U: NotificationsApi.send(email, otp)
+  U->>D: tx 1 - rate limit + idempotency + INSERT pending
+  U->>G: deliver(message)
+  G->>S: send (timeout)
+  S-->>G: unavailable
+  G->>K: send
+  K-->>G: accepted
+  G-->>U: sent via console, 2 attempts
+  U->>D: tx 2 - UPDATE sent
+  U-->>C: SendResult(sent)
+```
+*Two short transactions around the slow provider call; a total failure additionally writes `notifications.delivery_failed.v1` to the outbox in tx 2. See [Phase B](../phase-b/01-notifications-concepts-and-design.md).*
+
 ## 🧪 Labs
 1. Redraw diagram 5 for the case where `migrate-<service>` fails. What does the app do? What does `docker compose up --wait` print?
 2. Add a new box for "Auth" in diagram 3 showing where `JwtVerifier` runs (hint: it's a dependency of the router, not a separate service).

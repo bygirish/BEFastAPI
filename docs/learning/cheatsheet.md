@@ -9,9 +9,29 @@ make test               # all tests
 make test-service s=notes-service p=services/notes/service   # one service, only its own deps installed
 make format             # auto-fix style
 make new-service name=notes     # scaffold a service
+make docs-check         # docs health: links, anchors, codebase map, orphans, chapter sections
 make scaffold-check     # prove the scaffold still produces a green service
 uv run uvicorn --factory monolith_app.main:create_app --reload   # run the monolith
 ```
+
+## Local stack (Phase A2)
+```bash
+cp .env.example .env                  # once. COMPOSE_PROFILES=obs,tools => start everything
+make up                               # build + start + wait until healthy   (APP_PORT=18000 make up  if 8000 is taken)
+make ps | make logs s=app | make down | make reset      # status | follow | stop | stop+delete data
+make obs-smoke s=<service>            # prove log→trace→metric correlation for one service
+APP_PORT=18000 make stack-check       # boots everything with a throw-away service, verifies, tears down
+docker compose exec -T prometheus promtool check rules /etc/prometheus/generated-rules/<svc>.slo.rules.yml
+```
+| What | URL (local) | Login |
+|---|---|---|
+| App docs | `http://localhost:8000/docs` | — |
+| Grafana | `http://localhost:3000` | admin / admin |
+| Prometheus · Alertmanager | `:9090` · `:9093` | — |
+| Tempo · Loki (APIs) | `:3200` · `:3100` | — |
+| Mailpit (fake inbox) · Adminer (DB) | `:8025` · `:8080` | adminer: server `postgres`, user/password = the service name |
+
+**Find a request:** Grafana → Explore → Loki → `{service_name=~".+"} |= "<request-id>"` → *Open trace* → *Logs for this span*.
 
 ## Where does this code go?
 | I am writing… | Put it in… | Allowed to import |

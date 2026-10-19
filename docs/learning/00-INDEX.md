@@ -1,24 +1,27 @@
 # BEFastAPI — Learning & Onboarding Guide
 
 > **Who this is for:** a developer who knows basic Python and has heard of REST APIs, but has **not** built a
-> multi-service backend before. No prior knowledge of FastAPI internals, packaging, observability or
+> multi-service backend before. No prior knowledge of FastAPI internals, packaging, databases, observability or
 > architecture patterns is assumed — every term is explained the first time it appears (and in the [glossary](glossary.md)).
 >
-> **Why it exists:** each project phase ships working code **and** a chapter here. After reading a phase you should be able to
+> **Why it exists:** each project phase ships working code **and** documentation. After reading you should be able to
 > (1) explain *why* it was built that way, (2) run and modify it, and (3) review someone else's change to it.
+
+**Everything in this guide is verified:** commands were run and outputs pasted from reality; links, anchors and file paths are checked by `make docs-check`.
 
 ---
 
-## How to read this (pick a path)
+## Start here: pick your path
 
-| Path | For | What to do | Time |
-|---|---|---|---|
-| 🎓 **Study path** | Learning the ideas properly | Read the chapters in order, run every ▶ **Try it** block, attempt the labs, then answer the 🎯 interview questions *without scrolling* | ~1–2 days |
-| 🚀 **KT / onboarding path** | New joiner who must contribute this week | [Chapter 01](phase-a1/01-the-big-picture.md) → [03](phase-a1/03-boundaries-contracts-and-layers.md) → [05](phase-a1/05-a-request-end-to-end.md) → [07 hands-on](phase-a1/07-adding-a-service-hands-on.md), then keep the [cheat-sheet](cheatsheet.md) open | ~half a day |
-| 🔎 **Reference path** | You know the ideas, need a fact | [Cheat-sheet](cheatsheet.md), [glossary](glossary.md), [troubleshooting](troubleshooting.md), and the formal specs in [`docs/architecture/`](../architecture/README.md) | minutes |
+| You are… | Do this | Time |
+|---|---|---|
+| 🌱 **New to backend development** | [Foundations F·01–04](#foundations--the-skills-underneath-everything) → [Phase A1](#phase-a1--foundation) → [Phase A2](#phase-a2--local-environment--observability-stack) → [KT pack](#kt-pack--project-knowledge-transfer) → [capstone](assessments/02-capstone-project.md) | ~1–2 weeks part-time |
+| 🚀 **Joining the project this week** | [KT·02 onboarding plan](kt/02-reading-guide-and-onboarding-plan.md) (day-by-day), then [KT·01 codebase map](kt/01-codebase-map.md) and the [cheat-sheet](cheatsheet.md) | 1 day to productive, 1 week to confident |
+| 🔧 **Experienced, need the facts** | [Cheat-sheet](cheatsheet.md) · [glossary](glossary.md) · [troubleshooting](troubleshooting.md) · [decision log](kt/05-decision-log-in-plain-english.md) · formal specs in [`docs/architecture/`](../architecture/README.md) | minutes |
+| 🧭 **Reviewing / owning a service** | [Design patterns](kt/03-design-patterns-catalog.md) · [diagrams](kt/04-architecture-diagrams.md) · [debugging playbook](kt/06-debugging-playbook.md) · [skills matrix](assessments/03-skills-matrix.md) | half a day |
+| 🎓 **Teaching others** | [Question bank](assessments/01-question-bank.md) · [capstone with rubric](assessments/02-capstone-project.md) · [chapter template](templates/chapter-template.md) | — |
 
-Two-pass advice: read once for **understanding** (skip the 🎯 blocks), then a second time for **expertise**
-(do the 🎯 blocks and the labs).
+**Two-pass advice:** read once for **understanding** (skip the 🎯 blocks), then again for **expertise** (do the 🎯 blocks and labs).
 
 ## Symbols used in every chapter
 
@@ -34,39 +37,74 @@ Two-pass advice: read once for **understanding** (skip the 🎯 blocks), then a 
 
 ---
 
-## Phase A1 — Foundation (what exists today)
+## Foundations — the skills underneath everything
 
-The project is a **modular monolith**: one deployable app made of independent *services* (Auth, Users, Files,
-Notifications …) that are separated so strictly that any one of them can later be lifted into its own repo in about a day or two.
-Phase A1 builds the **foundation** all services will stand on.
+*Skip any chapter you already know well; each ends with a self-check so you can tell.*
+
+| # | Chapter | You will learn |
+|---|---|---|
+| F·01 | [The Python you need](foundations/01-python-for-this-codebase.md) | Type hints, `Protocol`, dataclass vs Pydantic, `async`/`await` (and how to block the loop), context managers, decorators, generics |
+| F·02 | [HTTP and FastAPI basics](foundations/02-http-and-fastapi-basics.md) | Requests/responses/status codes, routes, validation, `Depends`, middleware, lifespan, ASGI — with a runnable app |
+| F·03 | [Databases for backend developers](foundations/03-databases-for-backend-developers.md) | Transactions (ACID), indexes, N+1, `SKIP LOCKED`, schemas/roles, migrations, SQLAlchemy sessions |
+| F·04 | [Testing guide](foundations/04-testing-guide.md) | pytest, async tests, fixtures, fakes vs mocks, the test pyramid, coverage, how to test each kind of code here |
+
+## Phase A1 — Foundation
+
+The project is a **modular monolith**: one deployable app made of independent *services* (Auth, Users, Files, Notifications …) separated so strictly that any one can be lifted into its own repo in about a day or two. Phase A1 builds the foundation they stand on.
 
 | # | Chapter | You will learn |
 |---|---|---|
 | 01 | [The big picture](phase-a1/01-the-big-picture.md) | Monolith vs microservices vs *modular* monolith; the repo map; the one rule |
 | 02 | [Monorepo & uv](phase-a1/02-monorepo-and-uv.md) | Python packages, `pyproject.toml`, virtualenvs, uv workspaces, entry points, lockfiles |
 | 03 | [Boundaries, contracts & layers](phase-a1/03-boundaries-contracts-and-layers.md) | What a *contract* is, ports & adapters, layering, how a tool *enforces* architecture |
-| 04 | [Platform libraries tour](phase-a1/04-platform-libraries-tour.md) | The five shared libraries with runnable mini-examples (IDs, errors, DI, JWT, redaction…) |
-| 05 | [A request, end to end](phase-a1/05-a-request-end-to-end.md) | Follow one HTTP call through every layer, including the outbox + event bus (real logs/spans) |
-| 06 | [Observability for beginners](phase-a1/06-observability-for-beginners.md) | Logs vs metrics vs traces; correlation; the double-counting bug we found |
-| 07 | [Adding a service (hands-on)](phase-a1/07-adding-a-service-hands-on.md) | Generate a service, read it, extend it, break a rule on purpose |
+| 04 | [Platform libraries tour](phase-a1/04-platform-libraries-tour.md) | The five shared libraries with runnable mini-examples |
+| 05 | [A request, end to end](phase-a1/05-a-request-end-to-end.md) | One HTTP call through every layer, including the outbox + event bus |
+| 06 | [Observability for beginners](phase-a1/06-observability-for-beginners.md) | Logs vs metrics vs traces; correlation; the double-counting bug |
+| 07 | [Adding a service (hands-on)](phase-a1/07-adding-a-service-hands-on.md) | Generate a service, extend it, break a rule on purpose |
 | 08 | [Quality gates & CI](phase-a1/08-quality-gates-and-ci.md) | ruff, mypy, import-linter, pytest, the scaffold check, reading failures |
 
-Supporting pages: [Glossary](glossary.md) · [Cheat-sheet](cheatsheet.md) · [Troubleshooting (real errors we hit)](troubleshooting.md)
+## Phase A2 — Local environment & observability stack
+
+`docker compose up` runs **everything**: PostgreSQL, Redis, one migration job per service, the application, and a full observability stack (OpenTelemetry Collector, Tempo, Loki, Prometheus, Alertmanager, Grafana) plus developer tools — and a smoke test proves logs, traces and metrics are correlated.
+
+| # | Chapter | You will learn |
+|---|---|---|
+| 01 | [Docker for beginners](phase-a2/01-docker-for-beginners.md) | Images vs containers, our multi-stage Dockerfile line by line, non-root, healthchecks |
+| 02 | [Docker Compose: the whole system](phase-a2/02-compose-the-whole-system.md) | Profiles, startup order by conditions, one schema per service, migration jobs, generated blocks |
+| 03 | [The observability stack in practice](phase-a2/03-the-observability-stack-in-practice.md) | Log → trace → metric → exemplar → dashboard → SLO alert; collector config |
+| 04 | [What the live run taught us](phase-a2/04-what-the-live-run-taught-us.md) | Ten real failures found only by running the real system |
+
+## KT pack — project knowledge transfer
+
+| # | Page | Use it to… |
+|---|---|---|
+| KT·01 | [Codebase map](kt/01-codebase-map.md) | find what every folder/file is for (paths are CI-checked) |
+| KT·02 | [Reading guide & onboarding plan](kt/02-reading-guide-and-onboarding-plan.md) | read the code in the right order; follow a day-by-day plan |
+| KT·03 | [Design patterns catalogue](kt/03-design-patterns-catalog.md) | name the 16 patterns used here, see where, and when *not* to use them |
+| KT·04 | [Architecture diagrams](kt/04-architecture-diagrams.md) | explain the system in pictures (context, containers, components, sequences, data ownership, extraction) |
+| KT·05 | [Decision log in plain English](kt/05-decision-log-in-plain-english.md) | learn *why* — 20 decisions, rejected alternatives, trade-offs |
+| KT·06 | [Debugging playbook](kt/06-debugging-playbook.md) | diagnose problems with a six-step method and five live drills |
+| KT·07 | [Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) | prepare for the next phases |
+
+## Assessments — check what you learned
+
+| # | Page | What it gives you |
+|---|---|---|
+| 01 | [Question bank](assessments/01-question-bank.md) | 60 questions with answers + 7 scenarios, grouped by topic |
+| 02 | [Capstone project: Bookmarks service](assessments/02-capstone-project.md) | a full end-to-end build, milestones, acceptance output, hints, rubric |
+| 03 | [Skills matrix](assessments/03-skills-matrix.md) | four levels × eleven skill areas; honest self-assessment |
+
+## Supporting pages
+
+[Glossary](glossary.md) · [Cheat-sheet](cheatsheet.md) · [Troubleshooting — real errors we hit](troubleshooting.md) · [CONTRIBUTING](../../CONTRIBUTING.md) · [Chapter template](templates/chapter-template.md)
 
 ## Upcoming phases (chapters are added as each phase lands)
 
-| Phase | Chapter(s) planned |
-|---|---|
-| A2 – Local environment & observability stack | Docker & Compose for beginners; running Grafana/Tempo/Loki/Prometheus; reading your first trace |
-| B – Notifications | Vendor-neutral facade (adapter pattern in anger); static OTP for tests |
-| C – Auth | Passwords & hashing, JWT/JWKS deep-dive, OTP flows, lockout, RBAC with organizations |
-| D / E – Users, Files | Event-driven read models; signed URLs & storage ports |
-| F – Split rehearsal | Extracting a service for real (the playbook, step by step) |
+See [KT·07 Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) for what is built next (Notifications → Auth + RBAC → Users → Files → split rehearsal) and what to read beforehand.
 
 ## Where the "official" rules live
 
-These chapters **teach**; the files in [`docs/architecture/`](../architecture/README.md) **decide**. If they ever disagree, the
-architecture docs win — and please fix the chapter.
+These chapters **teach**; the files in [`docs/architecture/`](../architecture/README.md) **decide**. If they ever disagree, the architecture docs win — and please fix the chapter.
 
 | Question | Authoritative doc |
 |---|---|
@@ -79,5 +117,6 @@ architecture docs win — and please fix the chapter.
 
 ## Keeping this guide alive (for maintainers)
 
-Documentation is part of the **Definition of Done** for every phase: no phase is "done" until its chapter(s) exist, every ▶ block
-was actually run, and links were checked. Use [`templates/chapter-template.md`](templates/chapter-template.md).
+Documentation is part of the **Definition of Done** for every phase: no phase is "done" until its chapters exist, every ▶ block was actually run, and `make docs-check` is green
+(it fails on broken links/anchors, paths in the codebase map that no longer exist, pages not linked from this index, and chapters missing their standard sections).
+Use [`templates/chapter-template.md`](templates/chapter-template.md).

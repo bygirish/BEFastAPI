@@ -77,6 +77,61 @@ Search this page for the first line of your error message.
 
 ---
 
+## Docker, Compose and the live stack (Phase A2)
+
+### 16. `open ~/.docker/buildx/current: permission denied` when building
+- **Cause:** root-owned files inside `~/.docker/buildx` (created once by a `sudo docker`). **Fix:** `sudo chown -R "$USER" ~/.docker`. Automation workaround: point `DOCKER_CONFIG` at a private copy of `~/.docker`.
+
+### 17. Container exits at once: `ModuleNotFoundError: No module named 'redis'`
+- **Cause:** the production image has no dev dependencies; start-up imported an optional instrumentation unconditionally. **Fix:** only instrument installed libraries; test the "absent" case. (A2·01 §1.3)
+
+### 18. App crashes at start-up inside logging: `AttributeError: 'str' object has no attribute 'copy'`
+- **Cause:** our OTLP log handler formatted each record twice; structlog's formatter expects the event dict the second time. **Fix:** render once, pass a clean record; make the handler exception-safe. (A2·04)
+
+### 19. A warning on every log line: `Invalid type … _FixedFindCallerLogger for attribute value`
+- **Cause:** structlog's private record attributes were exported as OpenTelemetry attributes. **Fix:** strip them before export.
+
+### 20. Migration job exits 0 but `relation "<svc>.outbox" does not exist`
+- **Cause:** a query before `context.begin_transaction()` auto-started a transaction, so Alembic didn't commit; closing the connection rolled back. **Fix:** `connection.commit()` first. (A2·02 §2.5)
+
+### 21. `/readyz` returns 404 from `localhost:8000` although `docker compose ps` says healthy
+- **Cause:** another process owns `127.0.0.1:8000`. **Diagnose:** `lsof -nP -iTCP:8000 -sTCP:LISTEN`. **Fix:** `APP_PORT=18000`.
+
+### 22. Docker created a root-owned folder in the repo
+- **Cause:** a bind-mounted host path did not exist. **Fix:** keep placeholders in git (`.gitkeep`); `make obs-sync` recreates them.
+
+### 23. Dashboard panel shows *No data*
+Work through: (1) is there traffic in the time range? (2) does the metric exist? `curl localhost:9090/api/v1/label/__name__/values` (3) are label names what the query expects (`app_service`, not `app.service`)? (4) did a rate window need more samples? (5) legitimately empty (e.g. no 5xx yet)? We validated every panel query against live Prometheus before shipping.
+
+### 24. Collector panel/alert empty: metric not found
+- **Cause:** `otelcol_receiver_accepted_spans` has **no `_total` suffix** in this collector version. **Fix:** query the real names. Always check names with the label-values API.
+
+### 25. Grafana shows "Loading plugin panel…" for a long time
+- Panels lazy-load JavaScript; on a 2-CPU Docker VM the first dashboard open takes ~20 s. Wait; later loads are fast.
+
+### 26. pytest: `ERROR … _xunit_setup_module_fixture` at collection
+- **Cause:** a module-level name `setup_module` (even an import alias) is treated as an xunit fixture. **Fix:** rename. Related: `from pkg import setup` may return a re-exported *function*, not the submodule — use `importlib.import_module("pkg.setup")`.
+
+### 27. Docker out of memory / slow
+- Check Docker Desktop's memory (this stack used ≈ 0.46 GB for 14 containers; 3 GB total was enough). `docker stats --no-stream` shows who is heavy; `docker system df` shows disk.
+
+### 28. A 500 response says `"request_id": null`
+- **Cause:** Starlette's own 500 handler runs *outside* all user middleware, after the request id was cleared. **Fix:** `UnhandledErrorMiddleware` inside the observability middleware (found by the Postgres-down drill, [KT·06](kt/06-debugging-playbook.md)). Regression test in `apps/monolith/tests`.
+
+### 29. Log flood: the same error 40 times a minute while the database is down
+- **Cause:** the outbox relay retried every 0.5 s and logged a traceback each time. **Fix:** exponential backoff capped at 30 s, one traceback then short reminders, `outbox_relay_recovered` on healing.
+
+### 30. A dead-lettered outbox row says only "1 handler(s) failed"
+- **Cause:** the underlying exception wasn't in `last_error`. **Fix:** `EventDeliveryError` now includes `handler: ExcType: message`.
+
+### 31. Generated contract test breaks after I add a constructor argument
+- **Cause:** the test hand-built the in-process implementation. **Fix:** resolve it from the container (`app.state.container.resolve(<Name>Api)`) — the scaffold does this now.
+
+### 32. `make docs-check` fails: "codebase map lists a path that does not exist" / "orphan page" / "anchor not found"
+- Renamed/deleted a file? Update `docs/learning/kt/01-codebase-map.md`. New page? Link it from `docs/learning/00-INDEX.md`. Anchor: GitHub slugs drop punctuation and emoji and turn spaces into hyphens (`## 2.1 The problem` → `#21-the-problem`).
+
+---
+
 ## A debugging recipe that always works
 1. **Read the first error line**, not the last. Tracebacks and long tool output usually have the real cause at the top.
 2. **Reproduce in the smallest scope:** one package (`make test-service …`), one test (`pytest path::name -x`), one tool (`uv run lint-imports`).

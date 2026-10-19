@@ -76,3 +76,57 @@ Plain-English definitions, in the order you will meet them. 🔗 = see the chapt
 | **Lifespan** | FastAPI's start-up and shut-down hook. |
 | **Alembic** | Database migration tool — versioned scripts that evolve a schema. |
 | **Schema (Postgres)** | A namespace inside a database. Each service owns exactly one. |
+
+## Containers & Compose (Phase A2)
+| Term | Meaning |
+|---|---|
+| **Image / container / layer** | Immutable template / running instance of it / one cached build step. 🔗 [A2·01](phase-a2/01-docker-for-beginners.md) |
+| **Dockerfile / multi-stage build** | The build script / building in a throw-away stage and shipping only the result (smaller, safer). |
+| **Registry** | A server that hosts images (Docker Hub, ghcr.io). |
+| **Volume** | Storage that survives container restarts (database files). |
+| **Docker Compose** | Describes and runs many containers from one `docker-compose.yml`. 🔗 [A2·02](phase-a2/02-compose-the-whole-system.md) |
+| **Profile** | A label that turns optional services on/off (`obs`, `tools`). |
+| **Healthcheck** | A command Docker runs to decide if a container is *ready*, not just started. |
+| **One-shot job** | A container that does a task and exits (provisioning, migrations); `Exited (0)` means success. |
+| **`depends_on: condition`** | Wait for another container to be *healthy* or to *complete successfully* before starting. |
+| **Smoke test** | A fast end-to-end check of the critical path (`tools/obs_smoke.py`). |
+| **Provisioning (Grafana)** | Configuring datasources/dashboards from files ("as code") instead of by clicking. |
+
+## Observability stack (Phase A2)
+| Term | Meaning |
+|---|---|
+| **OTLP** | OpenTelemetry's wire protocol; the app speaks only this, to the Collector. |
+| **Collector** | The pipeline between apps and backends: receive → process → export. 🔗 [A2·03](phase-a2/03-the-observability-stack-in-practice.md) |
+| **Connector (spanmetrics, servicegraph)** | Collector component that turns one signal into another (spans → RED metrics, call graph). |
+| **Tempo / Loki / Prometheus** | Backends storing **traces** / **logs** / **metrics**. |
+| **Grafana** | The UI over all three, with links between them. |
+| **Alertmanager** | Groups and routes alerts fired by Prometheus rules. |
+| **Exporter (postgres/redis/blackbox)** | A helper that exposes a system's internals as Prometheus metrics. |
+| **Blackbox probe** | Checks a URL from the outside (`/readyz`) — availability as a client sees it. |
+| **LogQL / PromQL / TraceQL** | Query languages for Loki / Prometheus / Tempo. |
+| **Exemplar** | A sample `trace_id` stored with a metric data point — the bridge from a number to a trace. |
+| **Derived field** | A Grafana rule that turns a value in a log line (the `trace_id`) into a link. |
+| **Structured metadata (Loki)** | Searchable key/values stored with a log line without being indexed labels. |
+| **Error budget** | `1 − objective` — how much failure the SLO allows (0.1 % for 99.9 %). |
+| **Burn rate** | How many times faster than "exactly on budget" the budget is being spent. |
+
+## Testing & process (Foundations / KT)
+| Term | Meaning |
+|---|---|
+| **Fake / stub / mock** | Working stand-in / canned answers / records how it was called. Prefer fakes. 🔗 [F·04](foundations/04-testing-guide.md) |
+| **Fixture (pytest)** | Reusable test setup injected by argument name. |
+| **Parametrize** | Run one test body over many inputs. |
+| **Coverage** | Which lines tests executed (not whether results were asserted). |
+| **Test pyramid** | Many fast unit tests, fewer integration tests, very few end-to-end tests. |
+| **Contract test** | The same assertions run against the in-process and HTTP implementations of a contract. |
+| **Smoke test** | A quick end-to-end check of the critical path. |
+| **Definition of Done** | The checklist a change must satisfy to count as finished (tests, gates, docs). 🔗 [CONTRIBUTING](../../CONTRIBUTING.md) |
+| **ADR** | Architecture Decision Record: a short, dated note with owner (and expiry for waivers). |
+| **Runbook** | Step-by-step instructions for handling a specific alert. |
+| **Dead letter** | A message parked after too many failed attempts, with the error recorded. 🔗 [KT·06](kt/06-debugging-playbook.md) |
+| **Keyset (cursor) pagination** | Page by "after this id" instead of `OFFSET`; stable under concurrent inserts. 🔗 [capstone](assessments/02-capstone-project.md) |
+| **N+1 query** | One query for a list plus one per item. 🔗 [F·03](foundations/03-databases-for-backend-developers.md) |
+| **Row lock / `SKIP LOCKED`** | Database lock on selected rows / skip rows another transaction holds, so workers share a queue. |
+| **Event loop** | The scheduler that runs coroutines; blocking it stalls everything. 🔗 [F·01](foundations/01-python-for-this-codebase.md) |
+| **Liveness / readiness** | "Is the process alive?" / "Can it serve traffic now?" |
+| **Request ID** | An id on every request/response/log line so one request can be traced end to end. |

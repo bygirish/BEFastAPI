@@ -33,6 +33,8 @@ jobs:
         run: make typecheck
       - name: Architecture contracts (import-linter)
         run: uv run lint-imports
+      - name: Documentation health (links, anchors, codebase map, structure)
+        run: uv run python tools/check_docs.py
 
   discover:
     runs-on: ubuntu-latest

@@ -379,4 +379,4 @@ Every phase ships **two kinds of docs**:
 | Learning guide | `docs/learning/` | **beginner developers** (study, onboarding, KT) | teaches the ideas with analogies, diagrams, runnable examples, traps, interview questions and labs |
 
 A phase is **not done** until: (1) its chapter(s) exist, written from `docs/learning/templates/chapter-template.md`; (2) every ▶ command was run and its output pasted from reality;
-(3) external links were checked; (4) `docs/learning/00-INDEX.md`, the glossary, cheat-sheet and troubleshooting page are updated; (5) bugs found while documenting are fixed and covered by a test.
+(3) external links were checked; (4) `docs/learning/00-INDEX.md`, the glossary, cheat-sheet, troubleshooting page, codebase map and question bank are updated; (5) bugs found while documenting are fixed and covered by a test; (6) `make docs-check` is green (broken links/anchors, stale paths in the codebase map, orphan pages and missing chapter sections fail CI).

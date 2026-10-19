@@ -9,7 +9,7 @@ Status: **DRAFT v2 — decisions Q1–Q8 resolved (see §12)** · Stack: Python 
 > **Architecture update (2026-10-19):** Auth is now one service in an extraction-ready modular monolith. Folder layout (§3),
 > the OTP delivery facade (§5), and profile fields (§4) are superseded where they conflict with
 > [docs/architecture/ARCHITECTURE.md](../../../docs/architecture/ARCHITECTURE.md) — see its **§14 Reconciliation** for the exact mapping.
-> Short version: code lives in `services/auth/src/auth_service/` (layered); OTP *delivery* moves to the Notifications service
+> Short version: code lives in `services/auth/service/src/auth_service/` (layered; public surface in `services/auth/contracts/`); OTP *delivery* moves to the Notifications service
 > (Auth keeps OTP code ownership and static-OTP mode); profile fields move to the Users service.
 
 **Decisions at a glance:** signup with phone / email / Google · JSON bearer tokens only · **org-scoped RBAC from day one** ·

@@ -43,6 +43,8 @@ Run `tools/extraction_drill.py --service <name> --report`. It checks:
 | 10 | Dependency list in its own `pyproject.toml` is complete (clean venv install works) | drill |
 | 11 | `platform_*` libs consumed only as versioned packages (no path hacks) | CI |
 | 12 | Redis/object-storage keys namespaced | key-naming lint |
+| 13 | `observability/` assets present and lint-clean (SLOs, alert rules, dashboards, runbook); telemetry contract + redaction tests pass | rules/dashboard lint, T-8 |
+| 14 | All signals carry `app.service`; dashboards filter by `app_service` (not `service.name`) | telemetry contract test, dashboard lint |
 
 Anything ❌ is a **pre-extraction fix inside the monolith** (still deployable) — never fix it during cutover.
 
@@ -61,13 +63,16 @@ Anything ❌ is a **pre-extraction fix inside the monolith** (still deployable) 
 git clone <monolith> <name>-service && cd <name>-service
 git filter-repo --subdirectory-filter services/<name>        # or: git subtree split -P services/<name>
 ```
-Resulting repo root contains `pyproject.toml`, `src/<name>_service`, `contracts/`, `migrations/`, `tests/`, `Dockerfile`.
+Resulting repo root contains `service/` (package, migrations, tests), `contracts/`, `observability/`, `Dockerfile`, `README.md`.
+- Add a root `pyproject.toml` with a `[tool.uv.workspace]` (`members = ["service", "contracts"]`) — the same shape as the monorepo — plus the lint/type config copied from the monorepo root, and generate the repo's `.importlinter` from the same template (`tools/sync_workspace.py` logic, two roots).
 - Replace workspace references to `libs/platform_*` with pinned versions (`platform-core==x.y.z` from the private index, or git tags).
 - Publish `<name>-contracts` (independent version, semver) to the private index. Consumers will depend on it as a normal package.
-- Copy the CI template (lint, mypy, import-linter for this repo's two roots, tests, container build, contract tests).
+- Copy the CI template (lint, mypy, import-linter for this repo's two roots, tests, container build, contract tests, `promtool`/dashboard lint).
+- `services/<name>/observability/` (SLOs, alert rules, dashboards, runbook) comes along with the filter — register it with the shared Prometheus/Grafana provisioning of the target environment.
 
 ### Step 3 — Stand up infra for the service (2–4 h)
 - New database (or schema on a new cluster) + role. Secrets in the secret manager. Redis namespace/instance. Broker topic/stream (if events leave the process).
+- Point `OTEL_EXPORTER_OTLP_ENDPOINT` at the shared Collector; set `OTEL_SERVICE_NAME=<name>-service` (`app.service` stays `<name>`). Add the service to the compose `split` profile / Helm chart.
 - IaC/Helm/compose for the service: env vars `<NAME>_*`, readiness `/readyz`, liveness `/healthz`, resources, autoscaling policy.
 
 ### Step 4 — Move the data (2–4 h, rehearse first)
@@ -88,7 +93,9 @@ In `apps/monolith/wiring.py` (the only file that changes in the monolith):
 # before
 container.bind(FilesApi, FilesApiImpl(files_module))
 # after
-container.bind(FilesApi, FilesHttpClient(base_url=settings.files_base_url, token_provider=service_token))
+container.bind(
+    FilesApi, FilesHttpClient(base_url=settings.files_base_url, token_provider=service_token)
+)
 ```
 and remove the service from `ENABLED_SERVICES`. Consumers' business code, ports and adapters are untouched.
 - Roll out with a **percentage flag** in the wiring (`FILES_ROUTE_PERCENT=5 → 25 → 100`) using a small `WeightedFilesApi` that dispatches to Impl or HttpClient. Compare results/latency; abort by setting to 0.
@@ -99,7 +106,7 @@ and remove the service from `ENABLED_SERVICES`. Consumers' business code, ports 
 - Move the service's scheduled jobs/workers to the new deployment; ensure they're disabled in the monolith (single-run guarantee via `ENABLED_SERVICES`).
 
 ### Step 8 — Soak, then clean up (1–2 weeks)
-- Watch SLOs, error budgets, queue lag, DB metrics. Keep rollback ready (§6).
+- Watch the service's own SLO burn-rate alerts, error budget, queue lag, DB metrics — dashboards and alerts are the same ones used in the monolith (compare before/after by `app_service`). Keep rollback ready (§6).
 - Remove `services/<name>` from the monolith repo **only after** the soak; keep `<name>_contracts` as a dependency (a pinned package) for the remaining consumers.
 - Update `ARCHITECTURE.md §5` (service map) and `apps/` (delete `<name>_api`). Record the outcome in the ADR.
 

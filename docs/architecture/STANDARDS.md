@@ -10,6 +10,8 @@ How to use this document
 - **MUST / MUST NOT** = enforced by CI or a blocking review item. **SHOULD** = default; deviate with a one-line justification in the PR.
 - Anti-patterns (§7) are the *named failure modes*; each lists how it is detected.
 
+Companion docs: [OBSERVABILITY](OBSERVABILITY.md) (details behind the O-rules) · [LOCAL_ENVIRONMENT](LOCAL_ENVIRONMENT.md) (details behind the E-rules)
+
 Contents: [1 Boundaries](#1-boundary-rules) · [2 Layering](#2-layering-rules) · [3 Data](#3-data-rules) ·
 [4 Communication](#4-communication-rules) · [5 Cross-cutting](#5-cross-cutting-rules) · [6 Code style & testing](#6-code-style-and-testing) ·
 [7 Anti-pattern catalogue](#7-anti-pattern-catalogue) · [8 Enforcement](#8-enforcement) · [9 Exceptions process](#9-exceptions-process) ·
@@ -22,11 +24,11 @@ Contents: [1 Boundaries](#1-boundary-rules) · [2 Layering](#2-layering-rules) �
 | ID | Rule |
 |---|---|
 | **B-1** | A service MUST NOT import another service's implementation package (`<other>_service.*`). The only cross-service import allowed is `<other>_contracts`. |
-| **B-2** | `<name>_contracts` MUST be tiny and pure: Pydantic DTOs, `Protocol`s, event models, error types, and the HTTP client. It MUST NOT import FastAPI, SQLAlchemy, the service implementation, or anything from `libs/` beyond `platform_core` primitives. |
+| **B-2** | `<name>_contracts` MUST be tiny and pure: Pydantic DTOs, `Protocol`s, event models, error types, and the HTTP client. It MUST NOT *directly* import FastAPI, SQLAlchemy or the service implementation. Allowed platform dependencies: `platform_core`, `platform_events` (`IntegrationEvent`), `platform_http` (`ServiceHttpClient`) and `platform_observability` (`traced_contract_call`). |
 | **B-3** | `libs/*` MUST NOT import from `services/*` or `apps/*`. `services/*` MUST NOT import from `apps/*`. |
 | **B-4** | Only code under `apps/` may reference more than one service's `module.py` or bind ports to providers. |
 | **B-5** | Service dependencies form a DAG. A new edge in the service map requires updating `ARCHITECTURE.md §5`; a cycle MUST be broken with an event. |
-| **B-6** | A service MUST be runnable and testable alone: `uv run --package <name>-service pytest services/<name>` passes without any other service's code installed (other services replaced by fakes of their ports). |
+| **B-6** | A service MUST be runnable and testable alone: `uv run --isolated --package <name>-service pytest services/<name>/service` passes without any other service's code installed (other services replaced by fakes of their ports). |
 | **B-7** | Every service MUST declare all its real dependencies in its own `pyproject.toml` (no reliance on packages installed only because a sibling needs them). |
 | **B-8** | `libs/*` code MUST be business-agnostic. Promoting code into `libs/` needs: used by ≥3 services, no domain vocabulary, an owner (CODEOWNERS). Otherwise duplicate it. |
 
@@ -37,10 +39,15 @@ Contents: [1 Boundaries](#1-boundary-rules) · [2 Layering](#2-layering-rules) �
 class AvatarStore(Protocol):
     async def get_avatar_url(self, file_id: UUID) -> str | None: ...
 
+
 # services/users/src/users_service/infrastructure/clients/files_avatar_store.py   (the ONLY place importing files_contracts)
 from files_contracts.api import FilesApi
+
+
 class FilesAvatarStore:
-    def __init__(self, files: FilesApi) -> None: self._files = files
+    def __init__(self, files: FilesApi) -> None:
+        self._files = files
+
     async def get_avatar_url(self, file_id: UUID) -> str | None:
         try:
             return (await self._files.get_signed_url(file_id, ttl_s=300)).url
@@ -127,6 +134,24 @@ class RegisterUser:
 | **X-8** | **Background jobs** are owned by one service, registered via `module.py`, idempotent, and named/queued with the service prefix. |
 | **X-9** | **Internal endpoints** (`/internal/v1/*`) require a service principal and are excluded from public gateway routes. |
 | **X-10** | **Feature flags / settings** that change behaviour per environment come from settings, never from `if ENV == "prod"` scattered in code (one validated check at startup is fine). |
+| **O-1** | Telemetry uses the **OpenTelemetry API** and OTLP only. SDK/exporters live solely in `platform_observability`. No vendor agents/SDKs (Datadog, New Relic, Sentry init…) in service code. `opentelemetry-api` is allowed in `api/`, `application/`, `infrastructure/`; **not** in `domain/`. |
+| **O-2** | Logs are structured JSON via the platform logger: constant snake_case `event`, data in fields (no f-string messages), OTel attribute names, `trace_id`/`span_id`/`request_id` injected automatically. `print()` is banned. |
+| **O-3** | **Log once, at the boundary** (HTTP handler, job runner, event-handler wrapper). Don't log-and-raise in inner layers. |
+| **O-4** | Never emit secrets or PII (passwords, OTPs, tokens, auth headers, raw email/phone, request bodies) to logs, spans or metrics. Use IDs or masked values. Redaction processors are mandatory and not bypassable. |
+| **O-5** | Metric attributes come from **closed enumerations** declared with the instrument (allow-list). No user/org/session IDs, URLs, emails, IPs, error text. Names are dotted `<service>.<noun>[.<verb>]` with base units. |
+| **O-6** | Every use case is wrapped in a span (`@traced_use_case`); every cross-service adapter call has a CLIENT span (same name in-process and over HTTP); outbox rows carry `traceparent` and consumers use span **links**. |
+| **O-7** | `app.service` is stamped on every signal by the platform — never set by hand. |
+| **O-8** | Each service ships `observability/` (`slo.yaml`, alert rules, dashboards, `runbook.md`, README with metric/log/span catalog). CI lints it; an alert without a runbook section fails the build. |
+| **O-9** | Page on **SLO burn rate** (multi-window, multi-burn-rate). Cause-based alerts (CPU, queue age, pool saturation) need a one-line justification in the alert annotations. |
+| **O-10** | Health endpoints `/livez`, `/readyz`, `/startupz` come from the platform builder; `readyz` aggregates each enabled module's `health()`. |
+| **O-11** | Telemetry MUST NOT block or fail a request: batched async export, bounded queues, drop-and-count on failure. |
+| **O-12** | RED metrics are automatic. Add business metrics only when a business question or SLO needs them, and document them in the service's observability README. |
+| **E-1** | Every service runs from the root `docker-compose.yml`. Adding a service goes through `tools/new_service.py`, which adds its schema+role init, `migrate-<svc>` job and `ENABLED_SERVICES` entry. No hand-edited per-service special cases. |
+| **E-2** | One Dockerfile pattern for all apps: multi-stage, non-root, `HEALTHCHECK` on `/readyz`, graceful SIGTERM (drain + flush telemetry). Image versions are pinned — no `latest`. |
+| **E-3** | Configuration only via environment variables; `.env.example` documents every variable; no secrets in compose files or images. |
+| **E-4** | Start-up ordering uses health/completion conditions, never `sleep`. Migrations run as one-shot per-service jobs before the app starts. |
+| **E-5** | The local observability stack uses the same OTLP/Collector configuration shape as production; only backends differ. |
+| **E-6** | `make test s=<service>` must work without compose (unit) and may use testcontainers (integration). |
 
 ---
 
@@ -148,6 +173,7 @@ class RegisterUser:
 | **T-5** | Security-sensitive modules (tokens, OTP, lockout, RBAC) require negative tests (replay, expiry, escalation, cross-org access). |
 | **T-6** | A PR that adds a service-to-service edge MUST add/modify an architecture test or doc entry proving the edge is declared. |
 | **T-7** | Tests live inside their service (`services/<name>/tests`); cross-service end-to-end tests live under `apps/monolith/tests`. |
+| **T-8** | Telemetry tests per service: secrets/OTP/PII never appear in logs/spans/metrics (redaction test); metric attributes ⊆ allow-list; a request yields a server span + use-case span + correlated log line + RED metric (telemetry contract test). |
 
 ---
 
@@ -183,6 +209,13 @@ Each entry: **symptom → why it blocks extraction → do this instead → detec
 | **AP-24** | **Shared Alembic history / one giant migration chain** | Can't move one schema's history | Per-service Alembic (D-3) | CI runs each service's migrations alone on an empty DB |
 | **AP-25** | **Leaky pagination/filter language** — exposing raw SQL-ish filters or ORM field names in contracts | Locks provider's storage design | Stable, documented query params in DTOs | review |
 | **AP-26** | **Trusting client-supplied identity** (`user_id`/`org_id` in body used for authorization) | Cross-tenant data leaks, worse when services multiply | Derive from `Principal` (X-2) | security tests (T-5) |
+| **AP-27** | **High-cardinality metric labels** (user_id, raw URL, error message, email) | Explodes time-series count; cost and instability; makes metrics unusable | Closed enumerations; put IDs on traces/logs (O-5) | instrument allow-list test; Prometheus series limit |
+| **AP-28** | **PII/secrets in telemetry** (OTP in a log line, token in a span attribute, email as metric label) | Security/compliance incident; telemetry is widely readable and long-lived | Masked identifiers; redaction processors (O-4) | redaction test (T-8); Collector safety-net; gitleaks |
+| **AP-29** | **Unstructured or duplicate logging** (`print`, f-string messages, log-and-raise at every layer) | Unqueryable logs, noise, duplicate alerts, no correlation | Constant `event` + fields; log once at boundary (O-2, O-3) | ruff `T20`; custom check; review |
+| **AP-30** | **Vendor lock-in in app code** (direct Datadog/Sentry/NewRelic SDK calls, backend URLs in services) | Changing the observability vendor means touching every service | OTel API + Collector (O-1) | import-linter forbidden imports |
+| **AP-31** | **Alerting on causes, not symptoms** (CPU > 80 %, "any error log"), or alerts with no runbook | Alert fatigue, missed real user impact | SLO burn-rate alerts + runbooks (O-8, O-9) | rules lint in CI |
+| **AP-32** | **Telemetry in the critical path** (synchronous exporters, awaiting collector, unbounded queues) | Observability outage becomes a product outage | Async batched export, drop-and-count (O-11) | fault-injection test: collector down |
+| **AP-33** | **Compose/infra drift** (hand-edited per-service compose entries, `sleep` for ordering, `latest` tags, secrets in compose, app that only works in one environment) | "Works on my machine"; extraction rehearsal impossible | Generator-managed entries, health-based ordering, pinned images, env-only config (E-1…E-5) | `make up` in CI; compose lint; image-pin check |
 
 ---
 
@@ -190,7 +223,9 @@ Each entry: **symptom → why it blocks extraction → do this instead → detec
 
 Rules without tooling decay. These run in CI on every PR (`.github/workflows/architecture.yml`).
 
-### 8.1 import-linter (`.importlinter`) — illustrative
+### 8.1 import-linter (`.importlinter`) — GENERATED
+
+The real config is generated from the services on disk by `tools/sync_workspace.py` (CI runs it with `--check`), so a new service gets its contracts automatically and nobody edits `.importlinter` by hand. The excerpt below is illustrative; see the generated file for the exact contracts. Layer names inside a service are relative to the container package (`api | infrastructure` > `application` > `domain`).
 
 ```ini
 [importlinter]
@@ -207,6 +242,7 @@ root_packages =
     platform_events
     platform_http
     platform_security
+    platform_observability
     monolith_app
 
 # B-1 / AP-01 / AP-19: implementation packages are independent of each other
@@ -250,7 +286,7 @@ forbidden_modules =
 [importlinter:contract:libs-independent]
 name = libs must not import services
 type = forbidden
-source_modules = platform_core platform_events platform_http platform_security
+source_modules = platform_core platform_events platform_http platform_security platform_observability
 forbidden_modules =
     auth_service
     users_service
@@ -289,6 +325,8 @@ New services get their contracts appended by `tools/new_service.py`; the generat
 
 | Check | Tool | Rules covered |
 |---|---|---|
+| Rules/dashboards lint (`promtool check rules`, Grafana JSON validity, runbook anchors), telemetry contract tests, `make obs-smoke` nightly | `promtool`, pytest, `tools/obs_smoke.py` | O-6, O-8, O-9, T-8, AP-27…AP-32 |
+| Compose lint & boot test (`docker compose config`, image-pin check, `make up` healthy in CI nightly) | `docker compose`, script | E-1…E-5, AP-33 |
 | Lint, format, banned APIs (`ruff` with `flake8-tidy-imports` banned-api, no `utils.py`/`common.py` names, no module-level calls in layers) | `ruff` | S-3, S-4, AP-04, AP-12 |
 | Strict types on domain/application/contracts/libs | `mypy` | S-2, AP-05 |
 | DB isolation: scans models/migrations for cross-schema references; verifies per-service roles in the integration DB | `tools/check_db_isolation.py` | D-1..D-4, AP-02/03/24 |

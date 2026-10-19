@@ -1,6 +1,6 @@
 # Architecture — Extraction-Ready Modular Monolith
 
-Status: **DRAFT for review** · Python 3.12 + FastAPI · Last updated: 2026-10-19
+Status: **ACCEPTED — Phase A1 implemented (see README roadmap)** · Python 3.12 + FastAPI · Last updated: 2026-10-19
 
 > **The one rule:** *design every service as if it were already remote; deploy them as if they were one process.*
 >
@@ -8,7 +8,7 @@ Status: **DRAFT for review** · Python 3.12 + FastAPI · Last updated: 2026-10-1
 > or an ADR records the exception (see [STANDARDS.md §9](STANDARDS.md#9-exceptions-process)).
 
 Related docs: [README (index & decisions)](README.md) · [STANDARDS (patterns & anti-patterns)](STANDARDS.md) ·
-[EXTRACTION_PLAYBOOK](EXTRACTION_PLAYBOOK.md) · [Auth service plan](../../services/auth/docs/PLAN.md)
+[EXTRACTION_PLAYBOOK](EXTRACTION_PLAYBOOK.md) · [OBSERVABILITY](OBSERVABILITY.md) · [LOCAL_ENVIRONMENT (docker compose)](LOCAL_ENVIRONMENT.md) · [Auth service plan](../../services/auth/docs/PLAN.md)
 
 ---
 
@@ -50,16 +50,16 @@ Related docs: [README (index & decisions)](README.md) · [STANDARDS (patterns & 
 BEFastAPI/
 ├── apps/                                  # COMPOSITION ROOTS — the only place that knows about >1 service
 │   ├── monolith/                          # runs all enabled services in one process
-│   │   ├── main.py                        # create_app(): mounts each enabled service
-│   │   ├── wiring.py                      # binds consumer ports → providers (in-process adapters)
-│   │   └── settings.py                    # ENABLED_SERVICES, shared infra URLs
-│   ├── auth_api/main.py                   # runs ONE service standalone (≈10 lines each) — proves independence
-│   ├── users_api/main.py
+│   │   └── src/monolith_app/
+│   │       ├── main.py                    # create_app(): load_modules() via entry points → platform_http.create_application
+│   │       ├── wiring.py                  # binds consumer ports → providers (cross-service bindings live ONLY here)
+│   │       └── settings.py                # ENABLED_SERVICES, JWT verification settings
+│   ├── auth_api/                          # runs ONE service standalone (generated, ≈30 lines) — proves independence
+│   ├── users_api/
 │   └── ...
 │
 ├── services/                              # one folder == one future repo
 │   ├── auth/
-│   │   ├── pyproject.toml                 # package: auth-service   (private implementation)
 │   │   ├── contracts/                     # package: auth-contracts (PUBLIC, tiny, separately installable)
 │   │   │   ├── pyproject.toml
 │   │   │   └── src/auth_contracts/
@@ -68,25 +68,33 @@ BEFastAPI/
 │   │   │       ├── events.py              # versioned integration events (auth.user_registered.v1)
 │   │   │       ├── errors.py              # contract-level exceptions / error codes
 │   │   │       └── http_client.py         # HTTP implementation of api.py (used after extraction)
-│   │   ├── src/auth_service/              # private implementation (see §4)
-│   │   ├── migrations/                    # OWN Alembic env + version table, schema `auth`
-│   │   ├── tests/
+│   │   ├── service/                       # package: auth-service (private implementation)
+│   │   │   ├── pyproject.toml             # declares its REAL dependencies + `befastapi.services` entry point
+│   │   │   ├── src/auth_service/          # layered code (see §4)
+│   │   │   ├── migrations/                # OWN Alembic env + version table, schema `auth`
+│   │   │   └── tests/
+│   │   ├── observability/                 # slo.yaml, alerts.rules.yaml, dashboards/, runbook.md — travels with the service
 │   │   ├── Dockerfile                     # exists from day one, even if unused
 │   │   └── README.md                      # owner, purpose, dependencies, runbook
 │   ├── users/                             # same shape
 │   ├── files/
 │   ├── notifications/
-│   └── _template/                         # scaffold copied by `tools/new_service.py`
+│   └── (scaffold lives in tools/templates/, rendered by `tools/new_service.py`)
 │
 ├── libs/                                  # SHARED KERNEL — small, technical, business-agnostic
 │   ├── platform_core/                     # config base, logging, error base, ids, clock, pagination, DB session factory
 │   ├── platform_events/                   # EventBus port, in-process bus, transactional outbox, (future) broker adapters
-│   ├── platform_http/                     # request-id/trace middleware, error handlers, httpx client base (timeouts, retries)
-│   └── platform_security/                 # JWT verification (JWKS), Principal, permission helpers — NOT token issuing
+│   ├── platform_http/                     # ServiceModule contract, app factory (create_application / load_modules), uniform error handlers, httpx client base
+│   ├── platform_security/                 # JWT verification (JWKS), Principal, permission helpers — NOT token issuing
+│   └── platform_observability/            # OpenTelemetry setup, JSON logging + redaction, metrics/tracing helpers, health endpoints
 │
-├── tools/                                 # new_service.py, check_db_isolation.py, extraction_drill.py
+├── tools/                                 # new_service.py (+ templates/service/), gen_importlinter.py, check_db_isolation.py, extraction_drill.py
 ├── docs/architecture/                     # this folder (+ ADR/)
-├── docker-compose.yml                     # Postgres, Redis (later: broker)
+├── docker-compose.yml                     # EVERYTHING: Postgres, Redis, per-service migrations, monolith, observability stack, dev tools (profiles)
+├── compose.dev.yaml                       # dev override (hot reload)
+├── docker/Dockerfile                      # one multi-stage image for all apps
+├── deploy/                                # postgres init, observability configs (collector, prometheus, tempo, loki, grafana, alertmanager), dev keys
+├── Makefile                               # up / down / test / lint / drill / obs-smoke / reset
 ├── pyproject.toml                         # uv workspace root: members = services/*, services/*/contracts, libs/*, apps/*
 ├── .importlinter                          # boundary contracts (see STANDARDS §8)
 └── .github/workflows/                     # lint, types, architecture, tests-per-service, extraction-drill
@@ -95,6 +103,7 @@ BEFastAPI/
 Notes
 - **`services/` is kept** (it already exists in the repo and matches the "User Service / File Service" vocabulary).
   Inside a service, code is organised by layer; across services, only `*_contracts` may be imported.
+- **Why `service/` and `contracts/` are siblings (not nested):** uv does not allow a workspace member inside another member's directory, and siblings also make the public/private split visible in the tree.
 - **uv workspace** gives each service its own `pyproject.toml` and dependency list. A service's real dependencies are
   therefore *declared*, which is what makes copying it to another repo mechanical.
 - `libs/*` are installed as normal packages. On first extraction they are published to a private index (or pinned by git tag);
@@ -105,7 +114,7 @@ Notes
 ## 4. Anatomy of a service
 
 ```
-services/<name>/src/<name>_service/
+services/<name>/service/src/<name>_service/
 ├── module.py            # ServiceModule: the single entry the composition root calls (router, startup, events, health)
 ├── settings.py          # <NAME>_-prefixed settings; never read by other services
 ├── api/                 # DRIVING ADAPTER: HTTP
@@ -146,20 +155,30 @@ plus the **contract DTO** (`*_contracts`) for the cross-service boundary. Mappin
 
 ### 4.2 `module.py` — the single door
 
+Implemented in `libs/platform_http/src/platform_http/module.py` (`ServiceModule` Protocol + `BaseServiceModule` defaults). Each service registers
+`build_module` under the `befastapi.services` entry-point group in its `pyproject.toml`; `platform_http.load_modules()` discovers it, so adding a
+service never edits shared code. Abridged:
+
 ```python
-# illustrative — not yet implemented
 class ServiceModule(Protocol):
     name: str
+
     def settings(self) -> BaseSettings: ...
-    def routers(self) -> list[APIRouter]: ...                 # public + internal routers (prefix /api/v1/<name>, /internal/v1/<name>)
+    def routers(
+        self,
+    ) -> list[
+        APIRouter
+    ]: ...  # public + internal routers (prefix /api/v1/<name>, /internal/v1/<name>)
     def register_event_handlers(self, bus: EventBus) -> None: ...
-    def provide(self, container: Container) -> None: ...      # registers contracts_impl as provider of <name>_contracts.api
+    def provide(
+        self, container: Container
+    ) -> None: ...  # registers contracts_impl as provider of <name>_contracts.api
     async def on_startup(self) -> None: ...
     async def on_shutdown(self) -> None: ...
     def health(self) -> HealthReport: ...
 ```
 
-The composition root loops over `ENABLED_SERVICES` and calls these. A service never mounts itself, never reaches for `app`.
+The composition root (`platform_http.create_application`) loops over the enabled modules (`ENABLED_SERVICES`, default: all installed) and calls these. A service never mounts itself, never reaches for `app`.
 
 ---
 
@@ -245,7 +264,7 @@ files_service.contracts_impl.FilesApiImpl   files_contracts.http_client.FilesHtt
 - One Postgres cluster today; **one schema per service** (`auth`, `users`, `files`, `notifications`) and **one DB role per service**
   with grants only on its schema (enforced in non-local environments; `tools/check_db_isolation.py` verifies).
 - Each service has its **own Alembic environment**, own `alembic_version` table inside its schema, own migration history. Migrations run per service:
-  `uv run --package auth-service alembic -c services/auth/migrations/alembic.ini upgrade head`.
+  `uv run --package auth-service alembic -c services/auth/service/migrations/alembic.ini upgrade head`.
 - Each service has its **own `DATABASE_URL` setting** (`AUTH_DATABASE_URL`, …). They may point at the same cluster today.
   Extraction = `pg_dump -n auth | pg_restore` into a new database and change one URL.
 - **No cross-schema foreign keys, joins, views or triggers.** Reference other services' entities by opaque ID (`user_id: UUID`) only. Integrity across
@@ -280,6 +299,8 @@ files_service.contracts_impl.FilesApiImpl   files_contracts.http_client.FilesHtt
 | **Split** | each service runs from its own repo/image; wiring uses `*HttpClient`s and a broker event bus | after extraction |
 | **Hybrid** | monolith with `ENABLED_SERVICES` minus the extracted one; wiring binds its port to the HTTP client | during gradual migration — **both sides remain deployable** |
 
+Local orchestration for all modes is described in [LOCAL_ENVIRONMENT.md](LOCAL_ENVIRONMENT.md) (monolith by default; `split` profile reserved for extraction rehearsal).
+
 Public routes are namespaced `/api/v1/<service>/…` so a gateway (nginx, Kong, ALB, API Gateway) can route by prefix to a new origin without any client change.
 
 ---
@@ -295,11 +316,16 @@ Public routes are namespaced `/api/v1/<service>/…` so a gateway (nginx, Kong, 
 
 ## 11. Observability and operations
 
-- Logs: structured JSON, always include `service`, `request_id`, `trace_id`, `user_id` (hash/ID only), no PII/secrets/OTP codes.
-- Propagate `X-Request-ID` and W3C `traceparent` on every outbound call (HTTP clients do this by default) and as attributes on events.
-- Metrics/traces tagged by `service` even in the monolith (`opentelemetry` instrumentation with a `service.name` per module) so dashboards survive extraction.
-- Health: `/healthz` (liveness) and `/readyz` (readiness; aggregates each enabled module's `health()` + its DB/Redis checks).
-- Background jobs belong to a service (`application/jobs`), registered through `module.py`, with queue/stream names prefixed by service.
+Full standard: **[OBSERVABILITY.md](OBSERVABILITY.md)**. Summary:
+
+- **OpenTelemetry for traces, metrics and logs → OTLP → Collector → Tempo / Prometheus / Loki → Grafana (+ Alertmanager).** Vendor-neutral; backends swap in Collector config only.
+- Signals are correlated by construction: `trace_id`/`span_id` in every JSON log line, exemplars on latency histograms, provisioned Grafana links in all directions.
+- Every signal carries `app.service` (logical service) in addition to `service.name` (process), so dashboards, SLOs and alerts survive extraction unchanged.
+- Instrumentation is provided once by `libs/platform_observability` (HTTP, DB, Redis, httpx, events/outbox, jobs, use-case and contract-call spans). Services add only business metrics/spans.
+- SLOs and burn-rate alerts, dashboards and runbooks live in `services/<name>/observability/` and move with the service.
+- Health: `/livez`, `/readyz` (aggregates each enabled module), `/startupz`. Telemetry never blocks or fails a request.
+- Redaction of secrets/PII is automatic and tested; metric attributes are closed enumerations (no IDs).
+- Local: everything runs with one `docker compose up` — see **[LOCAL_ENVIRONMENT.md](LOCAL_ENVIRONMENT.md)**.
 
 ---
 
@@ -334,7 +360,7 @@ The [Auth plan](../../services/auth/docs/PLAN.md) stays valid; it is re-homed in
 
 | Auth plan item | New home / change |
 |---|---|
-| `services/auth/app/...` | `services/auth/src/auth_service/...` using the layer layout in §4 (`services` → `application/services`, `repositories`/`models` → `infrastructure/db`, `providers/sso` → `infrastructure/providers`) |
+| `services/auth/app/...` | `services/auth/service/src/auth_service/...` using the layer layout in §4 (`services` → `application/services`, `repositories`/`models` → `infrastructure/db`, `providers/sso` → `infrastructure/providers`) |
 | `providers/notify` OTP facade (`NotificationGateway`, Static/Console/InMemory senders) | **Moves to the Notifications service.** Auth defines `OtpDelivery` port; adapter calls `notifications_contracts.NotificationsApi`. OTP code ownership + static-OTP mode stay in Auth |
 | `users.display_name/avatar_url/locale/timezone` | **Moves to the Users service** (profile). Auth `users` table keeps `id`, `status`, credentials, lock fields, `token_version` |
 | `audit_log` | Stays in Auth for auth events; other services keep their own audit tables (later: unify via events) |

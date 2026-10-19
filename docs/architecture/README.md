@@ -1,6 +1,6 @@
 # Architecture Documentation — BEFastAPI
 
-Status: **ACCEPTED — decisions A1–A12 confirmed 2026-10-19** · Last updated: 2026-10-19
+Status: **ACCEPTED — decisions A1–A20 confirmed 2026-10-19** · Last updated: 2026-10-19
 
 A modular FastAPI monolith where **each service (Auth, Users, Files, Notifications, …) is built to be lifted out into its own
 repo and deployed separately with ≈ 1–2 days of mechanical work.**
@@ -8,18 +8,22 @@ repo and deployed separately with ≈ 1–2 days of mechanical work.**
 | Doc | Read it for |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Principles, repo layout, anatomy of a service, service map, communication (calls + events), data ownership, identity, deployment modes, testing architecture |
-| [STANDARDS.md](STANDARDS.md) | Numbered rules (B/L/D/C/X/S/T), 26 named anti-patterns with detection, CI enforcement (import-linter etc.), exceptions process, PR checklist |
+| [STANDARDS.md](STANDARDS.md) | Numbered rules (B/L/D/C/X/S/T), 33 named anti-patterns with detection, CI enforcement (import-linter etc.), exceptions process, PR checklist |
+| [OBSERVABILITY.md](OBSERVABILITY.md) | OpenTelemetry pipeline, logging/metrics/tracing standards, SLOs & burn-rate alerts, dashboards, redaction, how observability is tested and how it survives extraction |
+| [LOCAL_ENVIRONMENT.md](LOCAL_ENVIRONMENT.md) | Docker Compose design: every service + DB + Redis + observability stack + dev tools via one `docker compose up`; Makefile workflow; acceptance criteria |
 | [EXTRACTION_PLAYBOOK.md](EXTRACTION_PLAYBOOK.md) | When to extract, readiness scorecard, step-by-step cutover, hybrid mode, rollback, time budget, quarterly drill |
 | [Auth plan](../../services/auth/docs/PLAN.md) | Detailed Auth + RBAC design (re-homed into this structure; see ARCHITECTURE §14) |
 
-## The design in six lines
+## The design in eight lines
 
 1. `services/<name>/` is one future repo: own `pyproject.toml`, own DB schema + Alembic, own settings, own Dockerfile.
 2. Each service has a tiny public **`<name>_contracts`** package (DTOs, Protocols, events, errors, HTTP client). Everything else is private.
 3. Consumers define a **port** in their own words; an adapter binds it to the provider's contract — in-process today, HTTP after extraction.
 4. State changes publish **versioned events via a transactional outbox**; in-process bus today, broker later.
 5. **`apps/`** is the only place that wires services together; extraction = change one binding + move one schema.
-6. **CI enforces it** (import-linter, DB-isolation check, per-service test runs, extraction drill).
+6. **Observable by default**: OpenTelemetry traces/metrics/logs correlated end-to-end; SLOs, alerts and dashboards live inside each service folder.
+7. **One command locally**: `docker compose up` runs every service, databases, migrations and the observability stack.
+8. **CI enforces it** (import-linter, DB-isolation check, per-service test runs, extraction drill).
 
 ## Decisions (proposed defaults — please confirm or change)
 
@@ -37,6 +41,14 @@ repo and deployed separately with ≈ 1–2 days of mechanical work.**
 | A10 | Public route shape | `/api/v1/<service>/…` (gateway-routable); `/internal/v1/<service>/…` for service-to-service | single flat namespace |
 | A11 | Enforcement tooling | `import-linter`, `ruff` (banned-api), `mypy --strict` on core layers, custom DB-isolation & service-map checks | docs-only (rejected) |
 | A12 | Repo strategy after extraction | Mono-repo now → polyrepo per extracted service; `libs/*` + contracts published to a private index at first extraction | stay mono-repo with separate deploys (also viable; the playbook works for both) |
+| A13 | Telemetry standard | **OpenTelemetry** (API/SDK/OTLP) for traces, metrics, logs; Collector in front of all backends | vendor agent (rejected: lock-in) |
+| A14 | Local/default observability backends | **Grafana stack**: Tempo (traces), Prometheus (metrics + exemplars), Loki (logs), Grafana, Alertmanager; optional Pyroscope | Jaeger/ELK; hosted vendor later by Collector config only |
+| A15 | Observability assets location | **Inside each service** (`services/<name>/observability/`: SLOs, alert rules, dashboards, runbook) | central folder (rejected: doesn't travel on extraction) |
+| A16 | Alerting philosophy | **SLO multi-window burn-rate** alerts generated from `slo.yaml`; cause alerts by exception | threshold alerts only (rejected) |
+| A17 | Logical service identity in telemetry | `app.service` on every signal in addition to OTel `service.name` | rely on `service.name` only (breaks in the monolith) |
+| A18 | Compose design | One root `docker-compose.yml` with **profiles** (core, `obs`, `tools`, later `split`); `.env` sets `COMPOSE_PROFILES=obs,tools` so `docker compose up` starts everything | separate compose files per concern |
+| A19 | Migrations in compose | **One-shot `migrate-<svc>` job per service** (own Alembic) gating app start | app runs migrations on boot (rejected: races, blocks extraction) |
+| A20 | Split-mode rehearsal | Reserve `split` profile (per-service containers + Redis-Streams broker + prefix gateway); **build after ≥2 services have HTTP clients** (Roadmap F) | build now (premature) |
 
 ## Roadmap (no code yet)
 
@@ -44,14 +56,15 @@ Order matters: structure and guardrails first, then services from leaf to root o
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **A. Foundation** | uv workspace, `libs/platform_{core,events,http,security}` skeletons, `apps/monolith` + health, docker-compose (Postgres, Redis), CI (ruff, mypy, import-linter, per-service test matrix), `tools/new_service.py`, `.importlinter` generator, PR template, CODEOWNERS | `new_service.py demo` produces a service that passes all CI checks and the extraction drill |
+| **A1. Foundation** ✅ *(done 2026-10-19)* | uv workspace; libs `platform_{core,events,http,security,observability}` skeletons; `apps/monolith` with `/livez` `/readyz` `/startupz`; `ServiceModule` protocol; ruff/mypy/import-linter config; `tools/new_service.py` (generates service **incl. contracts, migrations, tests, Dockerfile entry, `observability/` folder**, adds compose + init entries); PR template; CODEOWNERS; CI | `new_service.py demo` produces a service that passes all CI checks and the extraction drill |
+| **A2. Local env & observability** | `docker/Dockerfile`; root `docker-compose.yml` (core + `obs` + `tools` profiles); Postgres init (schema+role per service); `keygen`, `migrate-<svc>` jobs; Collector, Prometheus, Tempo, Loki, Alertmanager, Grafana **provisioned with trace↔log↔metric correlation**; exporters + blackbox probes; base dashboards; `tools/gen_slo_rules.py`; Makefile; `tools/obs_smoke.py` | `cp .env.example .env && docker compose up` → all healthy ≤3 min; demo request visible as correlated trace/logs/metrics in Grafana; `make obs-smoke`, `make drill s=demo`, `make lint` green |
 | **B. Notifications v0** | `notifications` service: gateway/facade, Static/Console/InMemory senders, `NotificationsApi.send`, delivery log | contract tests pass on Impl + HttpClient; no dependency on other services |
 | **C. Auth** | Auth plan phases 0–6 mapped into the layer layout; `OtpDelivery` port → Notifications; JWKS; org-scoped RBAC | Auth runs standalone via `apps/auth_api`; extraction drill green |
 | **D. Users** | profile service reacting to `auth.user_registered.v1`; `UsersApi.get_profiles(ids)` | no import of Auth internals; event handler idempotency tests |
 | **E. Files** | metadata, upload sessions, signed URLs, storage provider port (S3/local) | avatar flow Users→Files through a port |
-| **F. First drill** | run the extraction drill on Notifications in staging | measured against the playbook time budget; findings folded into STANDARDS |
+| **F. Split rehearsal & first drill** | build compose `split` profile (broker bus, HTTP clients, gateway); run the extraction drill on Notifications | measured against the playbook time budget; findings folded into STANDARDS; dashboards/alerts unchanged after the flip |
 
-Auth Phases 0–6 re-sequence: scaffolding is covered by Phase A; **Auth Phase 2 (OTP + facade) is split** — the OTP code logic stays in Auth, the delivery facade is built in Phase B.
+Auth Phases 0–6 re-sequence: scaffolding is covered by Phases A1–A2; **Auth Phase 2 (OTP + facade) is split** — the OTP code logic stays in Auth, the delivery facade is built in Phase B.
 
 ## Glossary
 

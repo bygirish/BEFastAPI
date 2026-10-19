@@ -21,6 +21,7 @@ make up                               # build + start + wait until healthy   (AP
 make ps | make logs s=app | make down | make reset      # status | follow | stop | stop+delete data
 make obs-smoke s=<service>            # prove log→trace→metric correlation for one service
 APP_PORT=18000 make stack-check       # boots everything with a throw-away service, verifies, tears down
+make demo / make demo-status / make demo-down   # live demo with traffic (script: docs/learning/kt/08-demo-script.md)
 docker compose exec -T prometheus promtool check rules /etc/prometheus/generated-rules/<svc>.slo.rules.yml
 ```
 | What | URL (local) | Login |

@@ -93,6 +93,8 @@
 | `tools/stack_check.sh` | Boots everything with a throw-away service, verifies, tears down |
 | `tools/scaffold_check.sh` | Generates a throw-away service and runs every gate on it |
 | `tools/list_packages.py` | Lists workspace packages (used by CI and the Makefile) |
+| `tools/demo.sh` | `make demo`: boots everything with a throw-away `demo` service + background traffic; `down` removes it again |
+| `tools/demo_traffic.py` | Background traffic generator for the demo (healthy, slow, 4xx and 5xx requests) |
 | `tools/check_docs.py` | Documentation health check (links, anchors, this map, orphans, chapter sections) |
 | `tools/tests` | Tests for the tools themselves |
 

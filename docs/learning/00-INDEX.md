@@ -85,6 +85,7 @@ The project is a **modular monolith**: one deployable app made of independent *s
 | KT·05 | [Decision log in plain English](kt/05-decision-log-in-plain-english.md) | learn *why* — 20 decisions, rejected alternatives, trade-offs |
 | KT·06 | [Debugging playbook](kt/06-debugging-playbook.md) | diagnose problems with a six-step method and five live drills |
 | KT·07 | [Roadmap & pre-reading](kt/07-roadmap-and-prereading.md) | prepare for the next phases |
+| KT·08 | [Demo script](kt/08-demo-script.md) | present the whole platform live in 15–20 minutes (`make demo`) |
 
 ## Assessments — check what you learned
 

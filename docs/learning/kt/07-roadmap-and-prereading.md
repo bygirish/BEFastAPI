@@ -36,4 +36,4 @@ Open [`services/auth/docs/PLAN.md`](../../../services/auth/docs/PLAN.md) and rea
 - [ ] I can state the build order and the reason for it.
 - [ ] I know what to pre-read before the next phase I'll work on.
 
-**Back to the [index](../00-INDEX.md).**
+**Next:** [KT · 08 — Demo script →](08-demo-script.md)

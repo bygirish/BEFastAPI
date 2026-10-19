@@ -15,6 +15,7 @@ make up                      # postgres, redis, migrations, app, collector, temp
 #   Grafana http://localhost:3000 (admin/admin) · app http://localhost:8000/docs
 #   (port 8000 busy?  APP_PORT=18000 make up)
 make stack-check             # boot + verify + tear down, with a throw-away service
+make demo                    # live demo: everything + a throw-away service + background traffic (make demo-down to stop)
 ```
 
 ## Documentation map
